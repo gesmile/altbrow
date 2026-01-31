@@ -1,0 +1,9 @@
+requests>=2.32
+beautifulsoup4>=4.12
+lxml>=5.0
+html5lib>=1.1
+
+extruct>=0.16
+rdflib>=7.0
+tldextract>=5.1
+w3lib>=2.1

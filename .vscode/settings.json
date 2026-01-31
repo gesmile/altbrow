@@ -1,0 +1,23 @@
+{
+  "files.eol": "\n",
+
+  "files.exclude": {
+    "**/.venv312": true
+  },
+  "search.exclude": {
+    "**/.venv312": true
+  },
+
+  "python.analysis.exclude": [
+    "**/.venv312"
+  ],
+
+  "python.analysis.typeCheckingMode": "basic",
+
+  "python.defaultInterpreterPath": ".venv312\\Scripts\\python.exe",
+  "python.terminal.activateEnvironment": true,
+
+  "files.watcherExclude": {
+    "**/.venv312/**": true
+  }
+}

@@ -1,0 +1,78 @@
+version = 1
+
+[domains]
+first_party = [
+  "tmp.gedankenfalle.de"
+]
+
+cdn = [
+  "cloudflare.com",
+  "jsdelivr.net",
+  "unpkg.com",
+  "akamai.net"
+]
+
+analytics = [
+  "google-analytics.com",
+  "gtagmanager.com",
+  "matomo.org"
+]
+
+social = [
+  "facebook.com",
+  "twitter.com",
+  "linkedin.com",
+  "instagram.com"
+]
+
+[claims]
+require_sameAs_for = ["ANALYTICS", "SOCIAL"]
+allowed_external_classes = ["CDN", "FONT"]
+
+[comparison]
+ignore_domains = ["localhost", "127.0.0.1"]
+
+[trust]
+trusted_domains = [
+  "br.de",
+  "ard.de",
+  "gedankenfalle.de",
+  "tmp.gedankenfalle.de"
+]
+
+[validation.linked_data]
+max_depth = 2
+follow_same_domain_only = true
+timeout = 3
+
+[validation.schema_org]
+allow_unknown_properties = false
+
+[validation.microdata_vs_jsonld]
+tolerance = "strict"
+
+insecure_domains = [
+  "doubleclick.net",
+  "scorecardresearch.com"
+]
+
+[client]
+default_profile = "passive"
+
+[client.profiles.passive]
+use_session = false
+headers = {}
+
+[client.profiles.browser]
+use_session = true
+
+[client.profiles.browser.headers]
+"User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+"Accept-Language" = "de-DE,de;q=0.9,en;q=0.8"
+
+[client.profiles.consented]
+use_session = true
+
+[client.profiles.consented.headers]
+"User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+"Accept-Language" = "de-DE,de;q=0.9,en;q=0.8"
