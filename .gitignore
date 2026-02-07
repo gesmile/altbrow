@@ -21,6 +21,7 @@ Thumbs.db
 # --- Test / build ---
 .pytest_cache/
 .mypy_cache/
+*.egg-info/
 .coverage
 dist/
 build/

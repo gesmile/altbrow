@@ -1,0 +1,51 @@
+# -------------------------------------------------
+# Global defaults
+# -------------------------------------------------
+root = true
+[*]
+
+end_of_line = lf
+insert_final_newline = true
+charset = utf-8
+indent_style = space
+indent_size = 2
+
+trim_trailing_whitespace = true
+
+# -------------------------------------------------
+# Python
+# -------------------------------------------------
+[*.py]
+indent_style = space
+indent_size = 2
+
+# -------------------------------------------------
+# Config / Data
+# -------------------------------------------------
+[*.{toml,yaml,yml,json,ini,cfg,env}]
+indent_style = space
+indent_size = 2
+
+# -------------------------------------------------
+# Text / Docs / Logs
+# -------------------------------------------------
+[*.{md,txt,log,out,err}]
+indent_style = space
+indent_size = 2
+
+# -------------------------------------------------
+# CI / Shell
+# -------------------------------------------------
+[*.sh]
+indent_style = space
+indent_size = 2
+
+[.gitlab-ci.yml]
+indent_style = space
+indent_size = 2
+
+# -------------------------------------------------
+# Makefiles (Sonderfall!)
+# -------------------------------------------------
+[Makefile]
+indent_style = tab

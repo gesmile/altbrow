@@ -1,12 +1,11 @@
 import argparse
 import logging
-# import pprint
 
-from fetch import fetch_url
-from extract import extract_data
-from logging_config import setup_logging
-from config import load_config, get_client_profile, ConfigError
-from output import render_output, write_log
+from .fetch import fetch_url
+from .extract import extract_data
+from .logging_config import setup_logging
+from .config import load_config, get_client_profile, ConfigError
+from .output import render_output, write_log
 
 
 def main() -> None:

@@ -1,0 +1,88 @@
+# -------------------------------------------------
+# Global defaults
+# -------------------------------------------------
+
+# Alles Text → LF
+* text=auto eol=lf
+
+# -------------------------------------------------
+# Python / Build / Config
+# -------------------------------------------------
+
+*.py            text eol=lf
+*.pyi           text eol=lf
+*.toml          text eol=lf
+*.yaml          text eol=lf
+*.yml           text eol=lf
+*.json          text eol=lf
+*.ini           text eol=lf
+*.cfg           text eol=lf
+*.env           text eol=lf
+
+# Requirements / dependency files
+requirements*.txt text eol=lf
+Pipfile         text eol=lf
+Pipfile.lock    text eol=lf
+
+# -------------------------------------------------
+# Shell / CI / Automation
+# -------------------------------------------------
+
+*.sh            text eol=lf
+*.bash          text eol=lf
+*.zsh           text eol=lf
+.gitlab-ci.yml  text eol=lf
+.github/workflows/*.yml text eol=lf
+
+# -------------------------------------------------
+# Documentation
+# -------------------------------------------------
+
+*.md            text eol=lf
+*.rst           text eol=lf
+*.txt           text eol=lf
+
+# -------------------------------------------------
+# Logs / Output (immer Text, nie Binary)
+# -------------------------------------------------
+
+*.log           text eol=lf
+*.out           text eol=lf
+*.err           text eol=lf
+
+# -------------------------------------------------
+# Make / Misc
+# -------------------------------------------------
+
+Makefile        text eol=lf
+*.mk            text eol=lf
+
+# -------------------------------------------------
+# Binary files (niemals umschreiben!)
+# -------------------------------------------------
+
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.gif           binary
+*.svg           binary
+*.ico           binary
+
+*.pdf           binary
+*.zip           binary
+*.gz            binary
+*.tar           binary
+*.7z            binary
+
+*.whl           binary
+*.exe           binary
+*.dll           binary
+*.so            binary
+*.dylib         binary
+
+# -------------------------------------------------
+# Git intern / Safety
+# -------------------------------------------------
+
+*.patch         text eol=lf
+*.diff          text eol=lf

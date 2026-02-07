@@ -4,13 +4,13 @@ from urllib.parse import urlparse
 from extruct import extract
 from w3lib.html import get_base_url
 
-from classify_domain import classify_domain
-from classify_cookies import classify_cookies
+from .classify_domain import classify_domain
+from .classify_cookies import classify_cookies
 
 import logging
 logger = logging.getLogger(__name__)
 
-def extract_data(fetch_result: dict, config) -> dict:
+def extract_data(fetch_result: dict, config: dict) -> dict:
   html = fetch_result["html"]
   final_url = fetch_result["final_url"]
   headers = fetch_result["headers"]
@@ -40,6 +40,7 @@ def extract_data(fetch_result: dict, config) -> dict:
   classified_domains = [
     {
       "domain": d,
+      # "class": classify_domain(d, page_domain, config),
       "class": classify_domain(d, page_domain, config),
     }
     for d in sorted(external_domains)
@@ -68,7 +69,7 @@ def extract_data(fetch_result: dict, config) -> dict:
     },
   }
 
-def extract_cookies(cookiejar, page_domain: str) -> list[dict]:
+def extract_cookies(cookiejar, page_domain: str, config: dict) -> list[dict]:
   cookies = []
 
   for c in cookiejar:

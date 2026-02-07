@@ -1,0 +1,18 @@
+image: python:3.12-slim
+
+stages:
+  - build
+  - lint
+
+build:
+  stage: build
+  script:
+    - python -m pip install --upgrade pip
+    - pip install .
+    - altbrow --help
+
+lint:
+  stage: lint
+  script:
+    - pip install ruff
+    - ruff check app

@@ -1,4 +1,4 @@
-from urllib.parse import urlparse
+# from urllib.parse import urlparse
 
 
 KNOWN_CDN_HINTS = (

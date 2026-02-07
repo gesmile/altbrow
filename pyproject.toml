@@ -11,6 +11,15 @@ authors = [
 
 license = { text = "GPL-2.0-or-later" }
 
+dependencies = [
+  "requests",
+  "beautifulsoup4",
+  "lxml",
+  "extruct",
+  "rdflib",
+  "tldextract",
+]
+
 [project.urls]
 Homepage = "https://tmp.gedankenfalle.de"
 Source = "https://github.com/yourname/altbrow"
@@ -18,6 +27,13 @@ Source = "https://github.com/yourname/altbrow"
 # --------------------
 # Tool configuration
 # --------------------
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app"]
 
 [tool.flake8]
 max-line-length = 88
@@ -31,3 +47,7 @@ line_length = 88
 
 [tool.pyright]
 typeCheckingMode = "basic"
+
+[project.scripts]
+altbrow = "app.main:main"
+

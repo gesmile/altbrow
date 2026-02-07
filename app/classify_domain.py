@@ -1,4 +1,4 @@
-from domain_utils import get_registrable_domain
+from .domain_utils import get_registrable_domain
 
 def classify_domain(domain: str, page_domain: str, config: dict) -> dict:
   domain = domain.lower()
