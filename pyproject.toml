@@ -1,6 +1,6 @@
 [project]
 name = "altbrow"
-version = "0.1.0"
+version = "0.1.1"
 description = "An alternative, crawler-like browser that looks beneath the surface of the semantic web."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -10,6 +10,7 @@ authors = [
 ]
 
 license = { text = "GPL-2.0-or-later" }
+# license = { file = "LICENSE" }
 
 dependencies = [
   "requests",
@@ -18,11 +19,20 @@ dependencies = [
   "extruct",
   "rdflib",
   "tldextract",
+  "PyYAML"
+]
+
+[project.optional-dependencies]
+dev = [
+  "ruff",
+  "pytest",
+  "mkdocs",
+  "mkdocstrings[python]"
 ]
 
 [project.urls]
-Homepage = "https://tmp.gedankenfalle.de"
-Source = "https://github.com/yourname/altbrow"
+Homepage = "https://tmp.gedankenfalle.de/html5"
+Source = "https://github.com/gesmile/altbrow"
 
 # --------------------
 # Tool configuration
@@ -35,10 +45,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["app"]
 
-[tool.flake8]
-max-line-length = 88
-indent-size = 2
-extend-ignore = ["E203", "W503"]
+[tool.ruff]
+line-length = 88
+indent-width = 2
 
 [tool.isort]
 profile = "black"
@@ -50,4 +59,3 @@ typeCheckingMode = "basic"
 
 [project.scripts]
 altbrow = "app.main:main"
-
