@@ -25,3 +25,7 @@ Thumbs.db
 .coverage
 dist/
 build/
+
+# --- MkDocs output / build ---
+docs/site/
+docs/.cache/
