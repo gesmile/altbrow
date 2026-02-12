@@ -4,15 +4,28 @@ stages:
   - build
   - lint
 
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+cache:
+  paths:
+    - .cache/pip
+
 build:
   stage: build
+  allow_failure: false
   script:
     - python -m pip install --upgrade pip
     - pip install .
-    - altbrow --help
+    - altbrow --validate-config
+
 
 lint:
   stage: lint
+  allow_failure: false
   script:
-    - pip install ruff
+    - python -m pip install --upgrade pip
+    - pip install .[dev]
     - ruff check app
+    - cd docs
+    - mkdocs build --strict
