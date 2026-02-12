@@ -1,0 +1,51 @@
+[meta]
+source = "local"
+version = "2025-01"
+sha256 = "abc123..."
+
+
+
+[domains]
+
+cdn = [
+  "cloudflare.com",
+  "jsdelivr.net",
+  "unpkg.com",
+  "akamai.net"
+]
+
+analytics = [
+  "google-analytics.com",
+  "gtagmanager.com",
+  "matomo.org"
+]
+
+social = [
+  "facebook.com",
+  "twitter.com",
+  "linkedin.com",
+  "instagram.com"
+]
+
+
+
+[claims]
+require_sameAs_for = ["ANALYTICS", "SOCIAL"]
+allowed_external_classes = ["CDN", "FONT"]
+
+[comparison]
+ignore_domains = ["localhost", "127.0.0.1"]
+
+[trust]
+trusted_domains = [
+  "br.de",
+  "ard.de",
+  "gedankenfalle.de",
+  "tmp.gedankenfalle.de"
+]
+
+
+insecure_domains = [
+  "doubleclick.net",
+  "scorecardresearch.com"
+]

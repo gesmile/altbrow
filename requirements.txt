@@ -44,6 +44,8 @@ pyparsing==3.3.2
     # via rdflib
 pyrdfa3==3.6.5
     # via extruct
+pyyaml==6.0.3
+    # via altbrow (pyproject.toml)
 rdflib==7.5.0
     # via
     #   altbrow (pyproject.toml)
