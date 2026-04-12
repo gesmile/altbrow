@@ -29,7 +29,8 @@ ALLOWED_MAPPINGS = {
 }
 
 # Default tier per provider location — lower tier wins (first match in DB on tie)
-# Tier 0 is reserved for altbrow internal providers (inlineip, own, infrastructure)
+# Configuration for provider.name.category overwrites.
+# If no tier is configured at category level, this browser location mapping is used
 LOCATION_DEFAULT_TIER = {
     "inline": 1,
     "local":  1,
@@ -221,8 +222,8 @@ def default_config_provider() -> str:
   return f"""
 # provider.toml is only used when in "altbrow.toml" is set: `meta.use-provider = true`
 
-# 1st,   given, cli:       --config /etc/altbrow.toml  ->  /etc/provider.toml
-# 2nd,   exits, user:      ~/.altbrow/altbrow.toml     ->  ~/.altbrow/provider.toml
+# 1st, given, cli:         --config /etc/altbrow.toml  ->  /etc/provider.toml
+# 2nd, if exits, user:     ~/.altbrow/altbrow.toml     ->  ~/.altbrow/provider.toml
 # 3rd, default, portable:  ./altbrow.toml              ->  ./provider.toml
 
 # --- 8< ---
@@ -253,7 +254,7 @@ def default_config_provider() -> str:
 # source  = ["<resolver-ip>"]                 # dns: ip list, e.g. openDNS, pihole
 # --- 8< ---
 
-# # altbrow internal 8 categories:
+# altbrow internal 8 categories:
 #
 #   ads           - advertising networks and ad delivery
 #   analytics     - user behaviour measurement and reporting
@@ -264,13 +265,13 @@ def default_config_provider() -> str:
 #   telemetry     - error reporting, performance monitoring, device telemetry
 #   tracking      - cross-site user tracking and profiling
 
-# # altbrow special 3 categories:
+# altbrow special 3 categories:
 #
 #   local          - RFC1918, localhost, loopback, your domains
 #   infrastructure - technical and semantic web standards, DNS resolvers
 #   unknown        - no category match 
 
-# # automatic categories (derived from structure, no provider needed):
+# automatic categories (derived from structure, no provider needed):
 #
 #   FIRST_PARTY   - same registrable domain (example.com) as the analysed page (e.g. www.example.com)
 #   PEER          - siblings like images.example.com
@@ -278,13 +279,9 @@ def default_config_provider() -> str:
 #   SELF_REF      - domain appears only in JSON-LD @id / Microdata, not in HTML traffic
 #   EXTERNAL      - external domain
 
-
-
-
 [meta]
 version = 1
 created = "{date.today()}"
-
 
 # ---------------------------------------------------------------------------
 # Local Provider
@@ -300,7 +297,6 @@ name    = "fail2ban SSH bans"
 mapping = ["suspicious"]
 source  = ["./fail2ban.txt"]
 
-
 # ---------------------------------------------------------------------------
 # Inline Domain Providers
 # ---------------------------------------------------------------------------
@@ -313,6 +309,7 @@ enabled  = true
 [[provider.infrastructure.category]]
 name    = "Semantic Web Standards"
 enabled = true
+tier    = 0
 mapping = ["infrastructure"]
 source  = [
   "schema.org",
@@ -330,6 +327,7 @@ source  = [
 [[provider.infrastructure.category]]
 name    = "Web Standards Bodies"
 enabled = true
+tier    = 0
 mapping = ["infrastructure"]
 source  = [
   "iana.org",
@@ -484,6 +482,7 @@ enabled  = true
 [[provider.inlineip.category]]
 name    = "RFC1918 Private"
 enabled = true
+tier    = 0
 mapping = ["local"]
 source  = [
   "10.0.0.0/8",
@@ -494,6 +493,7 @@ source  = [
 [[provider.inlineip.category]]
 name    = "Loopback"
 enabled = true
+tier    = 0
 mapping = ["local"]
 source  = [
   "127.0.0.0/8",
@@ -503,6 +503,7 @@ source  = [
 [[provider.inlineip.category]]
 name    = "Link-Local and Multicast"
 enabled = true
+tier    = 0
 mapping = ["infrastructure"]
 source  = [
   "169.254.0.0/16",
@@ -515,6 +516,7 @@ source  = [
 [[provider.inlineip.category]]
 name    = "Carrier-Grade NAT"
 enabled = true
+tier    = 0
 mapping = ["infrastructure"]
 source  = [
   "100.64.0.0/10",
@@ -543,6 +545,7 @@ source  = [
 # ---------------------------------------------------------------------------
 
 [provider.ipfire]
+name     = "IPFire"
 location = "remote"
 type     = "domain"
 enabled  = false
@@ -550,6 +553,7 @@ enabled  = false
 [[provider.ipfire.category]]
 name    = "Advertising"
 enabled = false
+tier    = 3
 mapping = ["ads"]
 source  = ["https://dbl.ipfire.org/lists/ads/domains.txt"]
 
@@ -573,12 +577,14 @@ source  = ["https://dbl.ipfire.org/lists/gambling/domains.txt"]
 
 [[provider.ipfire.category]]
 name    = "Malware"
+tier    = 1
 enabled = false
 mapping = ["malware"]
 source  = ["https://dbl.ipfire.org/lists/malware/domains.txt"]
 
 [[provider.ipfire.category]]
 name    = "Phishing"
+tier    = 1
 enabled = false
 mapping = ["malware"]
 source  = ["https://dbl.ipfire.org/lists/phishing/domains.txt"]
