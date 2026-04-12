@@ -123,7 +123,12 @@ def fetch_url(url: str, client_profile: dict) -> dict:
 
   except requests.exceptions.ConnectionError as exc:
     exc_str = str(exc)
-    if "NewConnectionError" in exc_str or "Connection refused" in exc_str or "WinError" in exc_str:
+    if "no.access" in exc_str or "NameResolutionError" in exc_str and "no.access" in exc_str:
+      logger.error(
+        "Server redirected %s to a block page (no.access) — "
+        "site may require browser headers (try --client-profile browser)", url
+      )
+    elif "NewConnectionError" in exc_str or "Connection refused" in exc_str or "WinError" in exc_str:
       logger.error("Connection refused for %s (host unreachable or port closed)", url)
     elif "SSLError" in exc_str or "SSL" in exc_str:
       logger.error("TLS error for %s (try --no-cert-check for self-signed certs)", url)
@@ -146,4 +151,3 @@ def fetch_url(url: str, client_profile: dict) -> dict:
   except requests.exceptions.RequestException as exc:
     logger.error("Request failed for %s: %s", url, exc)
     raise
-  

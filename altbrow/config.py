@@ -145,7 +145,15 @@ def get_client_profile(config: dict, override: str | None) -> dict:
       f"Available: {', '.join(profiles) or 'none'}"
     )
 
-  return {**defaults, **profiles[profile_name]}
+  merged = {**defaults, **profiles[profile_name]}
+
+  # inject [client.headers] if use_header is set in the merged profile
+  if merged.get("use_header", False):
+    global_headers = client_cfg.get("headers", {})
+    if global_headers:
+      merged["headers"] = global_headers
+
+  return merged
 
 def default_config_altbrow() -> str:
   return f"""
@@ -232,11 +240,13 @@ def default_config_provider() -> str:
 #
 # [[provider.name.category]]
 # name    = "human readable label"            # optional
-# tier    = <int>                             # optional, default: inline/local=1, dns/remote=2
 # enabled = [true|false]
+# tier    = <int>                              # optional, default: inline/local=1, dns/remote=2
 # mapping = ["<category>"]                    # one or more from list below
 #
 # source  = ["./file.txt"]                    # local: file path(s) relative to provider.toml
+# source  = ["example.com"]                   # inline domain: domain list
+# source  = ["192.168.1.0/24"]                # inline ip: ip or cidr list
 # source  = ["example.com", "iana.org"]       # inline domain: domain list
 # source  = ["1.1.1.0/24", "8.8.8.8"]         # inline ip: ip or cidr list
 # source  = ["https://example.com/list.txt"]  # remote: URL(s)
@@ -467,7 +477,6 @@ source  = [
 # ---------------------------------------------------------------------------
 
 [provider.inlineip]
-name     = "IP lists"
 location = "inline"
 type     = "ip"
 enabled  = true
@@ -541,7 +550,6 @@ enabled  = false
 [[provider.ipfire.category]]
 name    = "Advertising"
 enabled = false
-tier    = 3
 mapping = ["ads"]
 source  = ["https://dbl.ipfire.org/lists/ads/domains.txt"]
 
@@ -771,7 +779,7 @@ def validate_altbrow_config(config: dict, provider: dict | None = None) -> str:
 
   # --- description sentence ---
   lines = [
-    f"Altbrow Version v{__version__} reads with config Version {config_version} from {config_date}.",
+    f"Altbrow Version v{__version__} reads with config Version {config_version} from {config_date} a HTTP URL",
     f"It operates {activity} {consented} and counts domains, cookies, html, jsonld and microdata.",
     f"Default structured output format is {output_text}.",
     f"It {'does' if 'microdata_vs_jsonld' in validation else 'does not'} analyse microdata vs jsonld comparison for the summary.",
