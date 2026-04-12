@@ -1,0 +1,12 @@
+// .vscode/launch.json
+{
+  "configurations": [
+    {
+      "name": "altbrow dev",
+      "type": "python",
+      "request": "launch",
+      "module": "altbrow",
+      "args": ["--config", "tests/data/altbrow.toml", "--validate-config"]
+    }
+  ]
+}

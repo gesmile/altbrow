@@ -1,0 +1,103 @@
+name: Python CI
+
+on:
+  push:
+    branches: [ main, develop, master ]
+  pull_request:
+
+jobs:
+
+  build:
+    runs-on: linux
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create venv
+        run: python3 -m venv .venv
+
+      - name: Install build deps
+        run: |
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install .[dev]
+
+      - name: Validate config
+        run: |
+          set -e
+          .venv/bin/python -m altbrow --validate-config --config="tests/data/altbrow.toml"
+
+      - name: Build package
+        run: .venv/bin/python -m build
+
+      - name: Build docs
+        run: .venv/bin/mkdocs build -f docs/mkdocs.yml
+
+  validate:
+    runs-on: linux
+    # parallel to build — ruff and pytest don't need a built package
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create venv
+        run: python3 -m venv .venv
+
+      - name: Install dev deps
+        run: |
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install .[dev]
+
+      - name: Ruff
+        run: .venv/bin/ruff check altbrow
+
+      - name: Pytest
+        run: .venv/bin/pytest
+
+  integration:
+    runs-on: linux
+    needs: [ build, validate ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create venv
+        run: python3 -m venv .venv
+
+      - name: Install deps
+        run: |
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install .[dev]
+
+      - name: Start mock server
+        run: |
+          python3 -m http.server 8080 --directory tests/data &
+          sleep 1
+
+      - name: Build cache with mock provider
+        run: |
+          .venv/bin/python -m altbrow \
+            --config="tests/data/altbrow.toml" \
+            --build-cache
+
+      - name: Run integration tests
+        run: .venv/bin/pytest tests/test_cache.py -v
+
+#   integration-dns:
+#     runs-on: linux
+#     needs: validate
+#     # only runs when PIHOLE_IP is configured as repository variable
+#     if: vars.PIHOLE_IP != ''
+#     steps:
+#       - uses: actions/checkout@v4
+#
+#       - name: Create venv
+#         run: python3 -m venv .venv
+#
+#       - name: Install deps
+#         run: |
+#           .venv/bin/pip install --upgrade pip
+#           .venv/bin/pip install .[dev]
+#
+#       - name: Run DNS provider tests
+#         env:
+#           ALTBROW_PIHOLE_IP: ${{ vars.PIHOLE_IP }}
+#         run: .venv/bin/pytest tests/test_dns_provider.py -v
