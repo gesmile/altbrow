@@ -776,7 +776,7 @@ name    = "windows"
 tier    = 0
 enabled = true
 mapping = ["local"]
-source  = ["C:\Windows\System32\drivers\etc\hosts"]
+source  = ["C:\\Windows\\System32\\drivers\\etc\\hosts"]
 
 # --------------------
 
