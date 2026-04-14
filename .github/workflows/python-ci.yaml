@@ -8,7 +8,7 @@ on:
 jobs:
 
   build:
-    runs-on: linux
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,7 +34,7 @@ jobs:
         run: .venv/bin/mkdocs build -f docs/mkdocs.yml
 
   validate:
-    runs-on: linux
+    runs-on: ubuntu-latest
     # parallel to build — ruff and pytest don't need a built package
     steps:
       - uses: actions/checkout@v4
@@ -54,7 +54,7 @@ jobs:
         run: .venv/bin/pytest
 
   integration:
-    runs-on: linux
+    runs-on: ubuntu-latest
     needs: [ build, validate ]
     steps:
       - uses: actions/checkout@v4
@@ -85,7 +85,7 @@ jobs:
         run: .venv/bin/pytest tests/test_cache.py -v
 
 #   integration-dns:
-#     runs-on: linux
+#     runs-on: ubuntu-latest
 #     needs: validate
 #     # only runs when PIHOLE_IP is configured as repository variable
 #     if: vars.PIHOLE_IP != ''
