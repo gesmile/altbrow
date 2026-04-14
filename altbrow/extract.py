@@ -48,7 +48,7 @@ def _is_ip_address(host: str) -> bool:
     return False
 
 
-def extract_data(fetch_result: dict, cache_path: Path) -> dict:
+def extract_data(fetch_result: dict, cache_path: Path, config: dict | None = None, geo_readers=None) -> dict:
   """Extract and classify structured data, external domains and cookies.
 
   Collects all external domain references from HTML tags, classifies each
@@ -69,12 +69,16 @@ def extract_data(fetch_result: dict, cache_path: Path) -> dict:
       structured_data - JSON-LD and Microdata blocks
       signals         - external_domains, external_ips, cookies
   """
-  html      = fetch_result["html"]
-  final_url = fetch_result["final_url"]
-  headers   = fetch_result["headers"]
+  html        = fetch_result["html"]
+  orig_url    = fetch_result["url"]        # original URL before redirects
+  final_url   = fetch_result["final_url"]
+  headers     = fetch_result["headers"]
 
+  # use final_url for HTML analysis (links, assets)
+  # use orig_url for TARGET DNS lookup (before redirect to block page)
   page_host   = urlparse(final_url).netloc
   page_domain = page_host.rsplit(":", 1)[0].strip("[]")   # strip port / brackets
+  orig_host   = urlparse(orig_url).netloc.rsplit(":", 1)[0].strip("[]")
   base_url    = get_base_url(html, final_url)
   soup        = BeautifulSoup(html, "lxml")
 
@@ -91,13 +95,19 @@ def extract_data(fetch_result: dict, cache_path: Path) -> dict:
   if _is_ip_address(page_domain):
     ip_result = classify_ip(page_domain, cache_path)
     ip_result["occurrence"] = "TARGET"
+    if geo_readers:
+      from .geoip import lookup_ip as _geo_ip, format_geo
+      ip_result["geo"] = format_geo(_geo_ip(page_domain, geo_readers))
     classified_ips.append(ip_result)
 
   # TARGET domain entry — only for real hostnames, not bare IPs
   # (IPs are already handled in classified_ips above)
   target_result = None
   if not _is_ip_address(page_domain):
-    target_result = classify_domain(page_domain, page_domain, cache_path)
+    # classify orig_host for DNS lookup (pre-redirect), page_domain for relation
+    dns_domain = orig_host if orig_host and orig_host != page_domain else page_domain
+    target_result = classify_domain(dns_domain, dns_domain, cache_path, config)
+    target_result["value"] = page_domain  # display final domain
     target_result["occurrence"] = "TARGET"
 
   # ---------- External Domains ----------
@@ -123,6 +133,14 @@ def extract_data(fetch_result: dict, cache_path: Path) -> dict:
     kind = "asset" if tag.name in _ASSET_TAGS else "link"
     domain_occurrence.setdefault(parsed.netloc, set()).add(kind)
 
+  # add geo data to a result dict in-place
+  def _add_geo(result: dict, name: str) -> None:
+    if geo_readers and result:
+      from .geoip import lookup_domain as _geo_d, format_geo
+      result["geo"] = format_geo(_geo_d(name, geo_readers))
+
+  if target_result:
+    _add_geo(target_result, target_result["value"])
   classified_domains = [target_result] if target_result else []
 
   for domain, kinds in sorted(domain_occurrence.items()):
@@ -133,8 +151,9 @@ def extract_data(fetch_result: dict, cache_path: Path) -> dict:
     else:
       occurrence = "LINK_ONLY"
 
-    result = classify_domain(domain, page_domain, cache_path)
+    result = classify_domain(domain, page_domain, cache_path, config)
     result["occurrence"] = occurrence
+    _add_geo(result, domain)
     classified_domains.append(result)
 
   # ---------- Cookies ----------
@@ -160,7 +179,7 @@ def extract_data(fetch_result: dict, cache_path: Path) -> dict:
   }
 
 
-def extract_cookies(cookiejar, page_domain: str, cache_path: Path) -> list[dict]:
+def extract_cookies(cookiejar, page_domain: str, cache_path: Path, config: dict | None = None) -> list[dict]:
   """Classify cookies from a requests CookieJar.
 
   Args:
@@ -183,7 +202,7 @@ def extract_cookies(cookiejar, page_domain: str, cache_path: Path) -> list[dict]
       "httponly":  c.has_nonstandard_attr("HttpOnly"),
       "samesite":  c.get_nonstandard_attr("SameSite"),
       "expires":   c.expires,
-      "class":     classify_domain(domain, page_domain, cache_path),
+      "class":     classify_domain(domain, page_domain, cache_path, config),
     })
 
   return cookies

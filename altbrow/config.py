@@ -26,6 +26,7 @@ ALLOWED_MAPPINGS = {
     "local",
     "infrastructure",
     "unknown",
+    "geoip",
 }
 
 # Default tier per provider location — lower tier wins (first match in DB on tie)
@@ -36,6 +37,13 @@ LOCATION_DEFAULT_TIER = {
     "local":  1,
     "dns":    2,
     "remote": 2,
+}
+
+# Default [resolve] section values for provider.toml
+RESOLVE_DEFAULTS: dict = {
+    "resolve-domains":  False,
+    "resolver":         ["os"],
+    "resolver-timeout": 2,
 }
 
 class ConfigError(Exception):
@@ -230,20 +238,18 @@ def default_config_provider() -> str:
 # [provider.name]
 # name     = "human readable label"            # optional
 # location = "[local|inline|remote|dns]"
-# type     = "[ip|domain]"
+# type     = "[ip|domain|geoip]"
 # enabled  = [true|false]
 # subdomain_match = [true|false]
-#
-# # only for dns provider: specific redirect list
-# sinkhole = ["<ip>"]     # IP(s) returned for blocked domains
 #
 # # Every enabled provider needs at least one enabled category:
 #
 # [[provider.name.category]]
-# name    = "human readable label"            # optional
-# enabled = [true|false]
-# tier    = <int>                              # optional, default: inline/local=1, dns/remote=2
-# mapping = ["<category>"]                    # one or more from list below
+# name     = "human readable label"           # optional
+# enabled  = [true|false]
+# tier     = <int>                            # optional, default: inline/local=1, dns/remote=2 (0 reserved)
+# mapping  = ["<category>"]                   # one or more from list below
+# sinkhole = ["<ip>", ...]                    # dns only: block page IPs for this category
 #
 # source  = ["./file.txt"]                    # local: file path(s) relative to provider.toml
 # source  = ["example.com"]                   # inline domain: domain list
@@ -251,7 +257,7 @@ def default_config_provider() -> str:
 # source  = ["example.com", "iana.org"]       # inline domain: domain list
 # source  = ["1.1.1.0/24", "8.8.8.8"]         # inline ip: ip or cidr list
 # source  = ["https://example.com/list.txt"]  # remote: URL(s)
-# source  = ["<resolver-ip>"]                 # dns: ip list, e.g. openDNS, pihole
+# source  = ["<resolver-ip>", ...]            # dns: resolver IP(s) per category — allows multiple resolver categories
 # --- 8< ---
 
 # altbrow internal 8 categories:
@@ -265,11 +271,12 @@ def default_config_provider() -> str:
 #   telemetry     - error reporting, performance monitoring, device telemetry
 #   tracking      - cross-site user tracking and profiling
 
-# altbrow special 3 categories:
+# altbrow special 4 categories:
 #
 #   local          - RFC1918, localhost, loopback, your domains
 #   infrastructure - technical and semantic web standards, DNS resolvers
-#   unknown        - no category match 
+#   unknown        - no category match
+#   geoip          - used for location service, not a regular category
 
 # automatic categories (derived from structure, no provider needed):
 #
@@ -278,6 +285,32 @@ def default_config_provider() -> str:
 #   SUBDOMAIN     - subdomain of the analysed page domain, e.g. us.www.example.com
 #   SELF_REF      - domain appears only in JSON-LD @id / Microdata, not in HTML traffic
 #   EXTERNAL      - external domain
+
+# ---------------------------------------------------------------------------
+# Resolve Configuration
+# Controls domain-to-IP resolution and DNS resolver settings.
+# If this section is absent, RESOLVE_DEFAULTS apply.
+# ---------------------------------------------------------------------------
+
+[resolve]
+resolve-domains  = false       # resolve domains to IP and check against IP provider lists
+resolver         = ["os"]      # DNS resolver: "os" = system, or IP e.g. ["1.1.1.1","8.8.8.8"]
+resolver-timeout = 2           # seconds per DNS query
+
+# ---------------------------------------------------------------------------
+# DNS Resolve Filter
+# Controls which provider categories trigger a live DNS query.
+# With empty section: all enabled dns provider categories are queried.
+# filter-mode = "or"  -> category match OR tier <= max-tier
+# filter-mode = "and" -> category match AND tier <= max-tier
+# Disable all DNS queries: set enabled-categories = [] with filter-mode = "and"
+#                          or simply disable all DNS providers in provider.toml
+# ---------------------------------------------------------------------------
+
+[dns-resolve-filter]
+enabled-categories = ["malware", "suspicious"]
+max-tier = 1
+filter-mode = "and"
 
 [meta]
 version = 1
@@ -619,61 +652,253 @@ enabled = false
 mapping = ["social"]
 source  = ["https://dbl.ipfire.org/lists/violence/domains.txt"]
 
+# --------------------
+
+# same list is used by pi hole
+
+[provider.stevenblack]
+location = "remote"
+type     = "domain"
+enabled  = true
+
+[[provider.stevenblack.category]]
+name    = "PIHole"
+mapping = ["ads"]
+source  = ["https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"]
+
+
+# ---------------------------------------------------------------------------
+# GeoIP Provider (MaxMind GeoLite2)
+# Download: https://dev.maxmind.com/geoip/geolite2-free-geolocation-data
+# ---------------------------------------------------------------------------
+
+# Local example — files next to altbrow.toml, glob resolves newest version:
+[provider.maxmind]
+location = "local"
+type     = "ip"
+enabled  = false
+
+[[provider.maxmind.category]]
+name    = "Country"
+mapping = ["geoip"]
+source  = ["./GeoLite2-Country_*.tar.gz"]
+
+[[provider.maxmind.category]]
+name    = "ASN"
+mapping = ["geoip"]
+source  = ["./GeoLite2-ASN_*.tar.gz"]
+
+[[provider.maxmind.category]]
+name    = "City"
+mapping = ["geoip"]
+source  = ["./GeoLite2-City_*.tar.gz"]
+
+# Remote example — shared server in local network:
+# [provider.maxmind-net]
+# location = "remote"
+# type     = "ip"
+# enabled  = false
+# [[provider.maxmind-net.category]]
+# name    = "City"
+# mapping = ["geoip"]
+# source  = ["http://192.168.1.1:8080/GeoLite2-City.tar.gz"]
 
 # ---------------------------------------------------------------------------
 # DNS Provider
-# resolver and sinkhole are defined on provider level, not category level
+# sinkhole per category, source = resolver IPs per category
 # ---------------------------------------------------------------------------
 
-# DNS Provider 
-
 [provider.opendns]
+name     = "OpenDNS"
 location = "dns"
-type = "domain"
-enabled = false
-resolver = ["208.67.222.222", "208.67.220.220"]
-sinkhole = ["146.112.61.106", "146.112.61.107"]
+type     = "domain"
+enabled  = true
 
 [[provider.opendns.category]]
-name = "OpenDNS Sinkhole"
-mapping = ["malware"]
+name     = "Malware/Phishing"
+mapping  = ["malware"]
+source   = ["208.67.222.222", "208.67.220.220", "2620:119:35::35", "2620:119:53::53"]
+sinkhole = [
+  "146.112.61.104", "146.112.61.105", "146.112.61.107", "146.112.61.108",
+  "::ffff:146.112.61.104", "::ffff:146.112.61.105",
+  "::ffff:146.112.61.107", "::ffff:146.112.61.108",
+]
 
+[[provider.opendns.category]]
+name     = "Content/Adult (FamilyShield)"
+enabled  = false
+mapping  = ["social"]
+source   = ["208.67.222.123", "208.67.220.123"]
+sinkhole = ["146.112.61.106", "::ffff:146.112.61.106"]
+
+[[provider.opendns.category]]
+name     = "Suspicious/DNS Tunneling"
+enabled  = false
+mapping  = ["suspicious"]
+source   = ["208.67.222.222", "208.67.220.220", "2620:119:35::35", "2620:119:53::53"]
+sinkhole = ["146.112.61.110", "::ffff:146.112.61.110"]
+
+# --------------------
+
+# uses the list of stevenblack
 
 [provider.pihole]
 location = "dns"
-type = "domain"
-enabled = false
-resolver = ["192.168.1.1"]
-sinkhole = ["0.0.0.0", "::"]   # PiHole default
+type     = "domain"
+enabled  = false
 
 [[provider.pihole.category]]
-name = "PiHole local"
-mapping = ["ads"]
+name     = "PiHole local"
+mapping  = ["ads"]
+source   = ["192.168.1.1"]
+sinkhole = ["0.0.0.0", "::", "::ffff:0.0.0.0"]
+
+# ---------------------------------------------------------------------------
+# Tier 0 Provider
+# defaults, normally you do not need to change, only activate your hosts OS
+# ---------------------------------------------------------------------------
+
+[provider.system-hosts]
+name     = "hosts"
+location = "local"
+type     = "domain"
+enabled  = false
+
+[[provider.system-hosts.category]]
+name    = "linux"
+tier    = 0
+enabled = false
+mapping = ["local"]
+source  = ["/etc/hosts"]
+
+[[provider.system-hosts.category]]
+name    = "windows"
+tier    = 0
+enabled = true
+mapping = ["local"]
+source  = ["C:\Windows\System32\drivers\etc\hosts"]
+
+# --------------------
+
+[provider.definedip]
+location = "inline"
+type     = "ip"
+enabled  = true
+
+[[provider.definedip.category]]
+name    = "RFC1918 Private"
+enabled = true
+tier    = 0
+mapping = ["local"]
+source  = [
+  "10.0.0.0/8",
+  "172.16.0.0/12",
+  "192.168.0.0/16",
+]
+
+[[provider.definedip.category]]
+name    = "Loopback"
+enabled = true
+tier    = 0
+mapping = ["local"]
+source  = [
+  "127.0.0.0/8",
+  "::1/128",
+]
+
+[[provider.definedip.category]]
+name    = "Link-Local"
+enabled = true
+tier    = 0
+mapping = ["infrastructure"]
+source  = [
+  "169.254.0.0/16",
+  "fe80::/10",
+]
+
+[[provider.definedip.category]]
+name    = "Multicast"
+enabled = true
+tier    = 0
+mapping = ["infrastructure"]
+source  = [
+  "224.0.0.0/4",
+  "ff00::/8",
+]
+
+[[provider.definedip.category]]
+name    = "Broadcast"
+enabled = true
+tier    = 0
+mapping = ["infrastructure"]
+source  = [
+  "255.255.255.255/32",
+]
+
+[[provider.definedip.category]]
+name    = "Carrier-Grade NAT"
+enabled = true
+tier    = 0
+mapping = ["infrastructure"]
+source  = [
+  "100.64.0.0/10",
+]
+
 
 """
 
-def load_provider_config(main_config_path: Path, alt_config: dict) -> dict | None:
-  """Load `provider.toml` relative to `altbrow.toml` when provider support is enabled.
+def _strip_provider_sources(provider_cfg: dict) -> dict:
+  """Return a copy of provider config with non-essential source lists removed.
 
-  Reads `meta.use-provider` from the main config. If `false` (default),
-  returns `None` without touching the filesystem.
+  inline, local, and remote sources are only needed during cache build.
+  DNS sources (resolver IPs) and sinkholes are kept — needed for live DNS lookup.
+  The stripped version is merged into the main config dict as config["provider"].
 
   Args:
-    main_config_path: Path to the active `altbrow.toml` file.
-    alt_config: Parsed altbrow config dictionary (used to check `meta.use-provider`).
+    provider_cfg: Full parsed provider.toml dictionary.
 
   Returns:
-    Parsed provider config dictionary, or `None` if provider support is disabled.
+    Provider dict with non-dns sources removed from each category.
+  """
+  import copy
+  stripped = copy.deepcopy(provider_cfg)
+  for p in stripped.get("provider", {}).values():
+    location = p.get("location")
+    for cat in p.get("category", []):
+      if location != "dns":
+        cat.pop("source", None)  # inline/local/remote: in DB, not needed at runtime
+      # dns: keep source (resolver IPs) and sinkhole for live lookup
+
+  # keep dns-resolve-filter and resolve at top level for runtime use
+  for key in ("dns-resolve-filter", "resolve"):
+    if key in provider_cfg:
+      stripped[key] = copy.deepcopy(provider_cfg[key])
+
+  return stripped
+
+
+def load_provider_config(main_config_path: Path, config: dict) -> dict | None:
+  """Load provider.toml, merge stripped version into config, return full config for cache.
+
+  Reads `meta.use-provider` from config. If false, sets config["provider"] = False
+  and returns None. If true, loads provider.toml, validates it, merges a source-stripped
+  version into config["provider"], and returns the full provider config for build_cache().
+
+  Args:
+    main_config_path: Path to the active altbrow.toml file.
+    config: Parsed altbrow config dictionary — modified in place with ["provider"] key.
+
+  Returns:
+    Full parsed provider config dict (with sources) for build_cache(), or None if disabled.
 
   Raises:
-    ConfigError: If provider support is enabled but `provider.toml` does not exist,
-      or if the file cannot be parsed.
+    ConfigError: If use-provider is true but provider.toml does not exist or is invalid.
   """
-
-  meta = alt_config.get("meta", {})
+  meta = config.get("meta", {})
   use_provider = meta.get("use-provider", False)
 
   if not use_provider:
+    config["provider"] = False
     return None
 
   provider_path = main_config_path.parent / "provider.toml"
@@ -681,23 +906,32 @@ def load_provider_config(main_config_path: Path, alt_config: dict) -> dict | Non
   if not provider_path.exists():
     raise ConfigError(f"Provider config not found: {provider_path}")
 
-  return load_toml(provider_path)
+  provider_cfg = load_toml(provider_path)
+  validate_provider_config(provider_cfg)
 
-def validate_altbrow_config(config: dict, provider: dict | None = None) -> str:
+  # merge provider and dns-resolve-filter into main config
+  # do NOT merge meta — provider.toml meta would overwrite altbrow.toml meta
+  stripped = _strip_provider_sources(provider_cfg)
+  MERGE_KEYS = {"provider", "dns-resolve-filter", "resolve"}
+  for key, value in stripped.items():
+    if key in MERGE_KEYS:
+      config[key] = value
+
+  return provider_cfg
+
+def validate_altbrow_config(config: dict) -> str:
   """Validate an altbrow config dictionary and return a human-readable summary.
 
   Checks all required sections (`[meta]`, `[client]`, `[client.profiles]`) and
-  optional sections (`[validation]`, `[output]`). When provider support is enabled
-  the provider config is validated via `validate_provider_config`.
+  optional sections (`[validation]`, `[output]`). Provider summary is read from
+  config["provider"] which is set by load_provider_config().
 
   Args:
-    config: Parsed altbrow config dictionary (from `load_toml`).
-    provider: Optional parsed provider config dictionary. Required when
-      `meta.use-provider = true`.
+    config: Merged altbrow config dict — must have been processed by
+      load_provider_config() so config["provider"] is set.
 
   Returns:
-    Multi-line string summarizing the active configuration (version, profile,
-    output format, provider status).
+    Multi-line string summarizing the active configuration.
 
   Raises:
     ConfigError: On any missing or invalid field.
@@ -715,23 +949,19 @@ def validate_altbrow_config(config: dict, provider: dict | None = None) -> str:
   config_date = meta.get("created", "unknown")
 
   # --- Provider ---
-  provider_text = ""
   use_provider = meta.get("use-provider", False)
   if not isinstance(use_provider, bool):
     raise ConfigError("meta.use-provider must be boolean")
 
-  if use_provider:
-      if provider is None:
-          raise ConfigError(
-              "Provider configuration enabled but file 'provider.toml' not found"
-          )
-      validate_provider_config(provider)
-      provider_text = summarize_provider(provider)
+  provider_data = config.get("provider", False)
+  if use_provider and provider_data:
+    dns_rf = config.get("dns-resolve-filter", {})
+    resolve_cfg = config.get("resolve", {})
+    provider_text = summarize_provider({"provider": provider_data, "dns-resolve-filter": dns_rf, "resolve": resolve_cfg})
+  elif use_provider and not provider_data:
+    provider_text = "Provider configuration enabled but not loaded."
   else:
-      if provider is not None:
-        provider_text = "Provider configuration disabled."
-      else:
-        provider_text =  "Provider configuration disabled and config file missing."
+    provider_text = "Provider configuration disabled."
 
   # --- client ---
   if "client" not in config:
@@ -785,7 +1015,7 @@ def validate_altbrow_config(config: dict, provider: dict | None = None) -> str:
 
   # --- description sentence ---
   lines = [
-    f"Altbrow Version v{__version__} reads with config Version {config_version} from {config_date} a HTTP URL",
+    f"Altbrow Version v{__version__} reads with config Version {config_version} from {config_date}.",
     f"It operates {activity} {consented} and counts domains, cookies, html, jsonld and microdata.",
     f"Default structured output format is {output_text}.",
     f"It {'does' if 'microdata_vs_jsonld' in validation else 'does not'} analyse microdata vs jsonld comparison for the summary.",
@@ -837,9 +1067,53 @@ def summarize_provider(provider_cfg: dict) -> str:
   ]
   loc_str = f" ({', '.join(loc_parts)})" if loc_parts else ""
 
+  # count non-dns categories validated by dns-resolve-filter
+  # without filter: all enabled non-dns categories are validated
+  # with filter: only those matching tier/category criteria
+  dns_filter = provider_cfg.get("dns-resolve-filter", {})
+  from .dns_lookup import _should_query_category
+  validated   = 0
+  for p in providers.values():
+    if p.get("location") == "dns":
+      continue
+    if not p.get("enabled", False):
+      continue
+    for cat in p.get("category", []):
+      if not cat.get("enabled", True):
+        continue
+      if _should_query_category(cat, dns_filter):
+        validated += 1
+
+  if loc_counts.get("dns", 0) > 0:
+    if dns_filter:
+      dns_str = f"\n                 {validated} of {ccount} categories are validated additional by dns-resolve-filter"
+    else:
+      dns_str = f"\n                 {ccount} categories are validated by dns-resolve-filter"
+  else:
+    dns_str = ""
+
+  # geoip provider info
+  geo_names = [
+    cat.get("name") for p in providers.values()
+    if isinstance(p, dict) and p.get("enabled") and p.get("location") not in ("dns",)
+    for cat in p.get("category", [])
+    if cat.get("enabled", True) and "geoip" in cat.get("mapping", []) and cat.get("name")
+  ]
+  if geo_names:
+    geo_str = f"\n                 geoIP classification activated for {", ".join(geo_names)}"
+  else:
+    geo_str = "\n                 no geoIP provider activated"
+
+  # domain resolve status
+  resolve = provider_cfg.get("resolve", {})
+  resolve_enabled = resolve.get("resolve-domains", RESOLVE_DEFAULTS["resolve-domains"])
+  resolve_str = ", domain lookup enabled" if resolve_enabled else ", domain lookup disabled"
+
   return (
     f"Provider config: {pcount}{loc_str} of total {pcount_sum} provider active "
-    f"with {ccount} of total {ccount_sum} categories enabled"
+    f"with {ccount} of total {ccount_sum} categories enabled."
+    f"{dns_str}"
+    f"{geo_str}{resolve_str}"
   )
 
 def _as_list(value):
@@ -860,6 +1134,44 @@ def validate_provider_config(cfg: dict) -> None:
 
   if "created" not in meta:
     raise ConfigError("Missing meta.created")
+
+  # --- resolve (optional, defaults from RESOLVE_DEFAULTS) ---
+  resolve = cfg.get("resolve", {})
+  if resolve:
+    rd = resolve.get("resolve-domains")
+    if rd is not None and not isinstance(rd, bool):
+      raise ConfigError("resolve.resolve-domains must be boolean")
+    resolver = resolve.get("resolver")
+    if resolver is not None:
+      if not isinstance(resolver, list) or not resolver:
+        raise ConfigError("resolve.resolver must be a non-empty list")
+      for r in resolver:
+        if not isinstance(r, str):
+          raise ConfigError("resolve.resolver entries must be strings")
+        if r != "os" and not any(c.isdigit() for c in r):
+          raise ConfigError(f"resolve.resolver invalid entry '{r}' (use \"os\" or IP address)")
+    timeout = resolve.get("resolver-timeout")
+    if timeout is not None:
+      if not isinstance(timeout, int) or timeout <= 0:
+        raise ConfigError("resolve.resolver-timeout must be a positive integer (seconds)")
+
+  # --- dns-resolve-filter (optional) ---
+  dns_filter = cfg.get("dns-resolve-filter", {})
+  if dns_filter:
+    cats = dns_filter.get("enabled-categories")
+    if cats is not None:
+      if not isinstance(cats, list):
+        raise ConfigError("dns-resolve-filter.enabled-categories must be a list")
+      for c in cats:
+        if c not in ALLOWED_MAPPINGS:
+          raise ConfigError(f"dns-resolve-filter.enabled-categories invalid: '{c}'")
+    max_tier = dns_filter.get("max-tier")
+    if max_tier is not None:
+      if not isinstance(max_tier, int) or max_tier < 0:
+        raise ConfigError("dns-resolve-filter.max-tier must be a non-negative integer")
+    filter_mode = dns_filter.get("filter-mode")
+    if filter_mode is not None and filter_mode not in ("or", "and"):
+      raise ConfigError("dns-resolve-filter.filter-mode must be \"or\" or \"and\"")
 
   # --- provider section ---
   providers = cfg.get("provider", {})
@@ -888,27 +1200,7 @@ def validate_provider_config(cfg: dict) -> None:
       if not isinstance(p["subdomain_match"], bool):
         raise ConfigError(f"Provider '{pname}' subdomain_match must be boolean")
 
-    # --- dns-specific fields on provider level (Option A) ---
-    if location == "dns":
-      if "resolver" not in p:
-        raise ConfigError(f"Provider '{pname}' with location 'dns' missing 'resolver'")
-      if "sinkhole" not in p:
-        raise ConfigError(f"Provider '{pname}' with location 'dns' missing 'sinkhole'")
-
-      resolvers = p["resolver"]
-      sinkholes = p["sinkhole"]
-
-      if not isinstance(resolvers, list) or len(resolvers) == 0:
-        raise ConfigError(f"Provider '{pname}' resolver must be a non-empty list")
-      if not isinstance(sinkholes, list) or len(sinkholes) == 0:
-        raise ConfigError(f"Provider '{pname}' sinkhole must be a non-empty list")
-
-      for r in resolvers:
-        if not isinstance(r, str):
-          raise ConfigError(f"Provider '{pname}' resolver entries must be strings")
-      for s in sinkholes:
-        if not isinstance(s, str):
-          raise ConfigError(f"Provider '{pname}' sinkhole entries must be strings")
+    # --- dns: sinkhole per category, resolver IPs in category source ---
 
     # --- categories (all provider types) ---
     categories = p.get("category")
@@ -944,10 +1236,18 @@ def validate_provider_config(cfg: dict) -> None:
         if m not in ALLOWED_MAPPINGS:
           raise ConfigError(f"{cname} invalid mapping '{m}'")
 
-      # --- source: not required for dns (resolver/sinkhole on provider level) ---
+      # --- sinkhole: required per dns category ---
       if location == "dns":
-        continue
+        if "sinkhole" not in c:
+          raise ConfigError(f"{cname} missing 'sinkhole' (required for dns categories)")
+        sinkholes = c["sinkhole"]
+        if not isinstance(sinkholes, list) or len(sinkholes) == 0:
+          raise ConfigError(f"{cname} sinkhole must be a non-empty list")
+        for s in sinkholes:
+          if not isinstance(s, str):
+            raise ConfigError(f"{cname} sinkhole entries must be strings")
 
+      # --- source: resolver IPs for dns, file/url/domain for others ---
       if "source" not in c:
         raise ConfigError(f"{cname} missing 'source'")
 
@@ -955,6 +1255,15 @@ def validate_provider_config(cfg: dict) -> None:
 
       if not isinstance(sources, list) or len(sources) == 0:
         raise ConfigError(f"{cname}.source must be a non-empty list")
+
+      if location == "dns":
+        # source = resolver IP addresses
+        for src in sources:
+          if not isinstance(src, str):
+            raise ConfigError(f"{cname} dns source entries must be strings (resolver IPs)")
+        continue
+
+      is_geoip = "geoip" in mapping
 
       for src in sources:
 
@@ -964,10 +1273,16 @@ def validate_provider_config(cfg: dict) -> None:
         if location == "remote":
           if not (src.startswith("http://") or src.startswith("https://")):
             raise ConfigError(f"{cname} remote source must be URL")
+          if is_geoip and not src.endswith(".tar.gz"):
+            raise ConfigError(f"{cname} geoip remote source must be a .tar.gz URL")
 
         elif location == "local":
           if src.startswith("http://") or src.startswith("https://"):
-            raise ConfigError(f"{cname} local source must be file path")
+            raise ConfigError(f"{cname} local source must be file path or glob")
+          if is_geoip:
+            # glob patterns allowed for geoip local sources
+            if not (src.endswith(".tar.gz") or src.endswith(".mmdb") or "*" in src or "?" in src):
+              raise ConfigError(f"{cname} geoip local source must be .tar.gz, .mmdb or glob pattern")
 
         elif location == "inline":
           if ptype == "domain":

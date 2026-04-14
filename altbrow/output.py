@@ -19,32 +19,39 @@ except ImportError:
   yaml = None
 
 
-def _format_categories(cats: list[dict]) -> tuple[str, str]:
+def _format_categories(cats: list[dict], providers: dict | None = None) -> tuple[str, str]:
   """Split categories into winning (lowest tier) and full sorted list.
 
   Categories must be pre-sorted by tier ascending (classify_domain does this).
+  providers is config["provider"] — used to resolve human-readable provider names.
+  category_name is already stored in DB and used directly.
 
   Returns:
     Tuple (winning, all_str):
       winning - lowest-tier category name, or 'unknown' if no match
-      all_str - all as 'category(provider)', or '-' if no match
+      all_str - all as 'category(provider/category_name)', or '-' if no match
   """
   if not cats:
     return "unknown", "-"
   winning = cats[0]["category"]
+  providers = providers or {}
   def _fmt(c: dict) -> str:
-    label = c.get("provider_name") or c["provider"]
+    p_label = providers.get(c["provider"], {}).get("name") or c["provider"]
+    cat_label = c.get("category_name")
+    label = f"{p_label}/{cat_label}" if cat_label else p_label
     return c["category"] + "(" + label + ")"
   all_str = ", ".join(_fmt(c) for c in cats)
   return winning, all_str
 
 
-def _render_text(extracted: dict, verbosity: int) -> None:
+def _render_text(extracted: dict, verbosity: int, providers: dict | None = None) -> None:
   """Render human-readable text output to STDOUT.
 
   Args:
     extracted: Dict returned by extract_data().
     verbosity: Detail level (0=summary, 1=domains+ips, 2=full).
+    providers: config["provider"] for human-readable label lookup.
+    geo_readers: Open GeoReaders for live GeoIP lookup, or None.
   """
   signals    = extracted.get("signals", {})
   structured = extracted.get("structured_data", {})
@@ -66,6 +73,17 @@ def _render_text(extracted: dict, verbosity: int) -> None:
     f"{k}: {v}" for k, v in sorted(cat_counts.items())
   )
 
+  # count by country code from geo field
+  geo_counts: dict[str, int] = {}
+  for d in domains:
+    geo = d.get("geo", "")
+    cc = geo.split("/")[0].split(" ")[0] if geo else None
+    if cc and len(cc) == 2 and cc.isalpha():
+      geo_counts[cc] = geo_counts.get(cc, 0) + 1
+  geo_summary = ", ".join(
+    f"{k}: {v}" for k, v in sorted(geo_counts.items(), key=lambda x: -x[1])
+  )
+
   # count by winning category (lowest tier) per IP
   ip_cat_counts: dict[str, int] = {}
   for ip in ips:
@@ -78,7 +96,8 @@ def _render_text(extracted: dict, verbosity: int) -> None:
   )
 
   print("\n=== Summary ===")
-  print(f"External domains : {len(domains)}" + (f" ({cat_summary})" if cat_summary else ""))
+  geo_part = f" ({geo_summary})" if geo_summary else ""
+  print(f"External domains : {len(domains)}" + (f" ({cat_summary})" if cat_summary else "") + geo_part)
   print(f"External IPs     : {len(ips)}" + (f" ({ip_cat_summary})" if ip_cat_summary else ""))
   print(f"Cookies          : {len(cookies)}")
   print(f"JSON-LD blocks   : {len(jsonld)}")
@@ -89,23 +108,39 @@ def _render_text(extracted: dict, verbosity: int) -> None:
 
   print("\n=== External Domains ===")
   for d in domains:
-    winning, all_str = _format_categories(d.get("categories", []))
-    print(
-      f"  {d['relation']:<12} {d.get('occurrence',''):<10} "
-      f"{d['value']:<40} {winning:<15} {all_str}"
-    )
+    winning, all_str = _format_categories(d.get("categories", []), providers)
+    geo = d.get("geo", "")
+    geo_col = f"[{geo}]" if geo else "-"
+    if verbosity >= 2:
+      print(
+        f"  {d['relation']:<12} {d.get('occurrence',''):<10} "
+        f"{d['value']:<40} {winning:<15} {geo_col:<20} {all_str}"
+      )
+    else:
+      print(
+        f"  {d['relation']:<12} {d.get('occurrence',''):<10} "
+        f"{d['value']:<40} {winning:<15} {geo_col}"
+      )
 
   print("\n=== External IPs ===")
   if not ips:
     print("  (none)")
   else:
     for ip in ips:
-      winning, all_str = _format_categories(ip.get("categories", []))
+      winning, all_str = _format_categories(ip.get("categories", []), providers)
       occurrence = ip.get("occurrence", "")
-      print(
-        f"  {ip['relation']:<12} {occurrence:<10} "
-        f"{ip['value']:<40} {winning:<15} {all_str}"
-      )
+      geo = ip.get("geo", "")
+      geo_col = f"[{geo}]" if geo else "-"
+      if verbosity >= 2:
+        print(
+          f"  {ip['relation']:<12} {occurrence:<10} "
+          f"{ip['value']:<40} {winning:<15} {geo_col:<20} {all_str}"
+        )
+      else:
+        print(
+          f"  {ip['relation']:<12} {occurrence:<10} "
+          f"{ip['value']:<40} {winning:<15} {geo_col}"
+        )
 
   if verbosity < 2:
     return
@@ -145,11 +180,12 @@ def render_output(
   Args:
     extracted: Dict returned by extract_data().
     output_mode: 'text' | 'json' | 'yaml'
-    config: Parsed altbrow.toml dict (used for explicit_format fallback).
+    config: Merged altbrow config — config["provider"] used for label lookup.
     verbosity: Detail level for text mode (0=summary, 1=domains, 2=full).
   """
   if output_mode == "text":
-    _render_text(extracted, verbosity)
+    providers = config.get("provider") or {}
+    _render_text(extracted, verbosity, providers)
     return
 
   if output_mode == "json":

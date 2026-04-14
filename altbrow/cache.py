@@ -4,7 +4,6 @@
 #   get_or_build_cache()
 #   lookup_domain()
 #   lookup_ip()
-#   lookup_ip()
 
 import ipaddress
 import logging
@@ -25,7 +24,6 @@ CREATE TABLE IF NOT EXISTS domains (
   registrable_domain TEXT,
   category          TEXT    NOT NULL,
   provider          TEXT    NOT NULL,
-  provider_name     TEXT,
   provider_location TEXT    NOT NULL,
   category_name     TEXT,
   updated_at        TEXT    NOT NULL,
@@ -46,7 +44,6 @@ CREATE TABLE IF NOT EXISTS ips (
   is_cidr           INTEGER NOT NULL DEFAULT 0,
   category          TEXT    NOT NULL,
   provider          TEXT    NOT NULL,
-  provider_name     TEXT,
   provider_location TEXT    NOT NULL,
   category_name     TEXT,
   tier              INTEGER NOT NULL DEFAULT 2,
@@ -105,15 +102,22 @@ def _is_cidr(value: str) -> bool:
 
 
 def _load_local_source(path_str: str, config_path: Path) -> list[str]:
-  """Read entries from a local file, skipping comments and blank lines.
+  """Read entries from a local file in altbrow list or hosts format.
+
+  Supports both plain domain/IP lists and hosts file format
+  (``0.0.0.0 domain`` / ``127.0.0.1 domain`` lines) via parse_entries().
+  Absolute paths (e.g. /etc/hosts) are used as-is.
 
   Args:
-    path_str: File path as defined in provider source (relative or absolute).
+    path_str: File path as defined in provider source (absolute or relative
+      to altbrow.toml).
     config_path: Path to altbrow.toml, used to resolve relative paths.
 
   Returns:
-    List of non-empty, non-comment lines.
+    List of domain or IP strings.
   """
+  from .fetch_remote import parse_entries
+
   source_path = Path(path_str)
   if not source_path.is_absolute():
     source_path = config_path.parent / source_path
@@ -122,12 +126,7 @@ def _load_local_source(path_str: str, config_path: Path) -> list[str]:
     logger.warning("Local source not found: %s", source_path)
     return []
 
-  entries = []
-  for line in source_path.read_text(encoding="utf-8").splitlines():
-    line = line.strip()
-    if line and not line.startswith("#"):
-      entries.append(line)
-  return entries
+  return parse_entries(source_path.read_text(encoding="utf-8", errors="replace"))
 
 
 def build_cache(
@@ -184,10 +183,14 @@ def build_cache(
       logger.debug("Provider '%s' is dns, skipping for static cache", pname)
       continue
 
+    # geoip providers are handled by extract_geodbs, not inserted into DB
+    if ptype == "geoip":
+      logger.debug("Provider '%s' is geoip, handled by extract_geodbs", pname)
+      continue
+
     active_providers.append(pname)
     logger.info("Loading provider '%s' (%s/%s)", pname, location, ptype)
     subdomain_match = 1 if p.get("subdomain_match", True) else 0
-    pname_label = p.get("name")   # optional human-readable provider name
 
     # remote providers: fetch_remote_provider handles all categories internally
     if location == "remote":
@@ -197,13 +200,13 @@ def build_cache(
         if ctx["ptype"] == "domain":
           reg = _get_registrable_domain(entry)
           domain_rows.append((
-            entry, reg, ctx["category"], pname, pname_label,
+            entry, reg, ctx["category"], pname,
             "remote", ctx["category_name"], remote_tier, now, subdomain_match,
           ))
         elif ctx["ptype"] == "ip":
           cidr_flag = 1 if _is_cidr(entry) else 0
           ip_rows.append((
-            entry, cidr_flag, ctx["category"], pname, pname_label,
+            entry, cidr_flag, ctx["category"], pname,
             "remote", ctx["category_name"], remote_tier, now,
           ))
       continue
@@ -237,28 +240,28 @@ def build_cache(
           if ptype == "domain":
             reg = _get_registrable_domain(entry)
             domain_rows.append((
-              entry, reg, category, pname, pname_label,
+              entry, reg, category, pname,
               location, cat_name, tier, now, subdomain_match,
             ))
 
           elif ptype == "ip":
             cidr_flag = 1 if _is_cidr(entry) else 0
             ip_rows.append((
-              entry, cidr_flag, category, pname, pname_label,
+              entry, cidr_flag, category, pname,
               location, cat_name, tier, now,
             ))
 
   con.executemany(
     """INSERT OR IGNORE INTO domains
-       (value, registrable_domain, category, provider, provider_name, provider_location, category_name, tier, updated_at, subdomain_match)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+       (value, registrable_domain, category, provider, provider_location, category_name, tier, updated_at, subdomain_match)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
     domain_rows,
   )
 
   con.executemany(
     """INSERT OR IGNORE INTO ips
-       (value, is_cidr, category, provider, provider_name, provider_location, category_name, tier, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+       (value, is_cidr, category, provider, provider_location, category_name, tier, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
     ip_rows,
   )
 
@@ -346,20 +349,24 @@ def get_or_build_cache(
   return cache_path
 
 
-
-def lookup_domain(domain: str, cache_path: Path) -> list[dict]:
-  """Look up a domain, merging static DB and DNS provider results.
+def lookup_domain(
+  domain: str,
+  cache_path: Path,
+  config: dict | None = None,
+) -> list[dict]:
+  """Look up a domain, merging static DB and live DNS provider results.
 
   Tries exact value match first, then registrable domain fallback.
-  DNS providers are queried live — not cached (see TODO in function body).
+  If config is provided and contains dns providers, queries them live in parallel.
 
   Args:
     domain: Fully qualified domain name to look up.
     cache_path: Path to the SQLite cache file.
+    config: Merged altbrow config dict for DNS provider lookup. Optional.
 
   Returns:
     List of category dicts with keys:
-      category, provider, provider_location, category_name
+      category, provider, provider_location, category_name, tier
     Empty list if no match.
   """
   domain = domain.lower()
@@ -399,13 +406,44 @@ def lookup_domain(domain: str, cache_path: Path) -> list[dict]:
       results.append({
         "category":          r["category"],
         "provider":          r["provider"],
-        "provider_name":     r["provider_name"],
         "provider_location": r["provider_location"],
         "category_name":     r["category_name"],
         "tier":              r["tier"],
       })
 
-  # TODO: DNS live lookup — merge results here once dns module is implemented
+  # DNS live lookup — all enabled DNS providers are always queried.
+  # DNS providers (Pi-hole, OpenDNS) are independent classification sources.
+  # dns-resolve-filter controls which provider categories are queried
+  # inside dns_provider_lookup, not whether DNS runs at all.
+  if config:
+    from .dns_lookup import dns_provider_lookup
+    logger.debug("DNS provider lookup for: %s", domain)
+    dns_results = dns_provider_lookup(domain, config)
+    if dns_results:
+      existing = {(r["category"], r["provider"]) for r in results}
+      for r in dns_results:
+        if (r["category"], r["provider"]) not in existing:
+          results.append(r)
+
+  # resolve-domains: resolve domain to IP and check against IP provider lists
+  if config:
+    resolve = config.get("resolve", {})
+    from .config import RESOLVE_DEFAULTS
+    if resolve.get("resolve-domains", RESOLVE_DEFAULTS["resolve-domains"]):
+      import socket as _socket
+      try:
+        addr_infos = _socket.getaddrinfo(domain, None, _socket.AF_INET)
+        if addr_infos:
+          ip_str = addr_infos[0][4][0]
+          ip_results = lookup_ip(ip_str, cache_path)
+          if ip_results:
+            existing = {(r["category"], r["provider"]) for r in results}
+            for r in ip_results:
+              if (r["category"], r["provider"]) not in existing:
+                r["resolved_from"] = domain
+                results.append(r)
+      except Exception as exc:
+        logger.debug("resolve-domains failed for %s: %s", domain, exc)
 
   return results
 
@@ -443,7 +481,6 @@ def lookup_ip(ip_str: str, cache_path: Path) -> list[dict]:
     {
       "category":          r["category"],
       "provider":          r["provider"],
-      "provider_name":     r["provider_name"],
       "provider_location": r["provider_location"],
       "category_name":     r["category_name"],
       "tier":              r["tier"],
@@ -464,7 +501,6 @@ def lookup_ip(ip_str: str, cache_path: Path) -> list[dict]:
         results.append({
           "category":          row["category"],
           "provider":          row["provider"],
-          "provider_name":     row["provider_name"],
           "provider_location": row["provider_location"],
           "category_name":     row["category_name"],
           "tier":              row["tier"],

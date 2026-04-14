@@ -59,6 +59,7 @@ def classify_domain(
   domain: str,
   page_domain: str,
   cache_path: Path,
+  config: dict | None = None,
 ) -> dict:
   """Classify an external domain against the provider cache.
 
@@ -87,7 +88,7 @@ def classify_domain(
   relation   = _relation(domain, page_domain)
 
   categories = sorted(
-    lookup_domain(domain, cache_path),
+    lookup_domain(domain, cache_path, config),
     key=lambda c: c.get("tier", 2),
   )
 

@@ -2,6 +2,7 @@ import argparse
 import logging
 import sys
 
+from pathlib import Path
 from urllib.parse import urlparse
 
 from altbrow import __version__
@@ -18,6 +19,7 @@ from .config import (
 )
 from .cache import build_cache, get_or_build_cache
 from .output import render_output, write_log
+from .geoip import open_geodbs, close_geodbs, extract_geodbs
 
 
 def main() -> int:
@@ -83,18 +85,32 @@ def main() -> int:
   parser.add_argument(
     "--validate-config",
     action="store_true",
-    help="Validate altbrow.toml and exit"
+    help="Validate altbrow.toml & provider.toml and exit"
   )
 
   parser.add_argument(
     "--build-cache",
     action="store_true",
-    help="(Re)build provider cache DB and exit"
+    help="(Re)build provider cache DB, unpack geoIP mmdd files and exit"
+  )
+
+  parser.add_argument(
+    "--debug",
+    action="store_true",
+    help="Enable debug logging (steps, DNS queries, cache hits)"
+  )
+
+  parser.add_argument(
+    "--log-file",
+    metavar="PATH",
+    help="Write log to file (default: altbrow.log next to altbrow.toml)"
   )
 
   args = parser.parse_args()
 
-  setup_logging(debug=False)
+  # pre-parse --debug before full setup so logging is active during config load
+  debug_mode = "--debug" in sys.argv
+  setup_logging(debug=debug_mode)
   logger = logging.getLogger("altbrow")
 
   try:
@@ -102,6 +118,19 @@ def main() -> int:
     config = load_toml(config_path)
     client_profile = get_client_profile(config, args.client_profile)
     provider_config = load_provider_config(config_path, config)
+    # config["provider"] is now set by load_provider_config()
+
+    # log file — next to altbrow.toml or explicit path
+    if args.log_file or args.debug:
+      log_path = (
+        Path(args.log_file) if args.log_file
+        else config_path.parent / "altbrow.log"
+      )
+      fh = logging.FileHandler(log_path, encoding="utf-8")
+      fh.setLevel(logging.DEBUG if args.debug else logging.INFO)
+      fh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+      logging.getLogger().addHandler(fh)
+      logger.debug("Log file: %s", log_path)
   except ConfigError as exc:
     logger.error("Config error: %s", exc)
     return 3
@@ -112,8 +141,18 @@ def main() -> int:
 
   if args.validate_config:
     try:
-      text = validate_altbrow_config(config, provider_config)
+      text = validate_altbrow_config(config)
       print(text)
+      if args.verbose >= 1:
+        import json
+        # -v: merged config without sources (config["provider"] already stripped)
+        # -vv: merged config + full provider sources from raw provider_config
+        if args.verbose >= 2 and provider_config:
+          display = dict(config)
+          display["provider"] = provider_config.get("provider", {})
+        else:
+          display = config
+        print(json.dumps(display, indent=2, ensure_ascii=False, default=str))
       return 0
     except ConfigError as exc:
       logger.error("Config validation failed: %s", exc)
@@ -128,6 +167,20 @@ def main() -> int:
       return 3
     build_cache(cache_path, provider_config, config_path)
     print(f"Cache built: {cache_path}")
+    # GeoIP — extract tar.gz archives if geoip provider enabled
+    has_geoip_provider = any(
+      "geoip" in cat.get("mapping", [])
+      for p in (config.get("provider") or {}).values()
+      if isinstance(p, dict) and p.get("enabled")
+      for cat in p.get("category", []) if cat.get("enabled", True)
+    )
+    if has_geoip_provider:
+      extract_geodbs(config_path, provider_config)
+      geo_readers = open_geodbs(config_path)
+      if geo_readers:
+        close_geodbs(geo_readers)
+      else:
+        print("GeoIP disabled: no GeoLite2-*.mmdb found next to altbrow.toml")
     return 0
 
   try:
@@ -135,6 +188,26 @@ def main() -> int:
   except Exception as exc:
     logger.error("Cache build failed: %s", exc)
     return 3
+
+  # GeoIP readers — open if any geoip provider is enabled
+  geo_readers = None
+  providers = config.get("provider") or {}
+  has_geoip = any(
+    "geoip" in cat.get("mapping", [])
+    for p in providers.values() if isinstance(p, dict) and p.get("enabled")
+    for cat in p.get("category", []) if cat.get("enabled", True)
+  )
+  if has_geoip:
+    # collect enabled geoip category names (Country/ASN/City)
+    allowed_geo = {
+      cat.get("name")
+      for p in providers.values() if isinstance(p, dict) and p.get("enabled")
+      for cat in p.get("category", [])
+      if cat.get("enabled", True) and "geoip" in cat.get("mapping", []) and cat.get("name")
+    }
+    geo_readers = open_geodbs(config_path, allowed_geo or None)
+    if geo_readers:
+      logger.debug("GeoIP readers opened")
 
   if not args.url:
     parser.print_usage()
@@ -153,7 +226,7 @@ def main() -> int:
 
   try:
     fetched = fetch_url(url, client_profile)
-    extracted = extract_data(fetched, cache_path)
+    extracted = extract_data(fetched, cache_path, config, geo_readers)
   except Exception as exc:
     logger.error("Analysis failed: %s", exc)
     return 4
@@ -163,9 +236,9 @@ def main() -> int:
   if args.output:
     write_log(extracted, args.output)
 
+  close_geodbs(geo_readers)
   return 0
 
 
 if __name__ == "__main__":
   sys.exit(main())
-  
