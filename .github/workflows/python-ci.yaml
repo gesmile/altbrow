@@ -69,9 +69,11 @@ jobs:
 
       - name: Start mock server
         run: |
-          python3 -m http.server 8080 --directory tests/data &
-          for i in $(seq 1 10); do
-            python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/')" 2>/dev/null && break
+          nohup python3 -m http.server 8080 --directory tests/data \
+            > /tmp/mock-server.log 2>&1 &
+          echo $! > /tmp/mock-server.pid
+          for i in $(seq 1 15); do
+            python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/ipfire-ads.txt')" 2>/dev/null && break
             sleep 1
           done
 
