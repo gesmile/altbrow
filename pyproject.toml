@@ -20,7 +20,9 @@ dependencies = [
   "extruct",
   "rdflib",
   "tldextract",
-  "PyYAML"
+  "PyYAML",
+  "dnspython",
+  "maxminddb"
 ]
 
 [project.optional-dependencies]
@@ -29,7 +31,8 @@ dev = [
   "ruff",
   "pytest",
   "mkdocs",
-  "mkdocstrings[python]"
+  "mkdocstrings[python]",
+  "pip-tools"
 ]
 
 [project.urls]

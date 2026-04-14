@@ -17,6 +17,7 @@ __pycache__/
 # --- OS / Editor ---
 .DS_Store
 Thumbs.db
+.stack.md
 
 # --- Test / build ---
 .pytest_cache/
