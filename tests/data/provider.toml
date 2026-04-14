@@ -1,0 +1,367 @@
+# provider.toml is only used when in ./altbrow.toml is set: `meta.use-provider = true`
+
+[meta]
+version = 2
+created = "2026-04-13"
+
+# Local (file) Provider 
+
+[provider.fail2ban]
+
+location = "local"
+type = "ip"
+enabled = false
+
+[[provider.fail2ban.category]]
+mapping = ["suspicious"]
+source = ["./fail2ban.txt"]
+
+
+# ---------------------------------------------------------------------------
+# Inline Domain Providers
+# ---------------------------------------------------------------------------
+
+[provider.infrastructure]
+location = "inline"
+type     = "domain"
+enabled  = true
+
+[[provider.infrastructure.category]]
+name    = "Semantic Web Standards"
+enabled = true
+mapping = ["infrastructure"]
+source  = [
+  "schema.org",
+  "schema.googleapis.com",
+  "w3.org",
+  "w3c.org",
+  "purl.org",
+  "xmlns.com",
+  "rdf.data-vocabulary.org",
+  "ogp.me",
+  "dublincore.org",
+  "json-ld.org",
+]
+
+[[provider.infrastructure.category]]
+name    = "Web Standards Bodies"
+enabled = true
+mapping = ["infrastructure"]
+source  = [
+  "iana.org",
+  "mozilla.org",
+  "whatwg.org",
+]
+
+[provider.cdn]
+location = "inline"
+type     = "domain"
+enabled  = true
+
+[[provider.cdn.category]]
+name    = "Major CDN"
+enabled = true
+mapping = ["cdn"]
+source  = [
+  "cdnjs.cloudflare.com",
+  "cdn.cloudflare.com",
+  "akamai.net",
+  "akamaiedge.net",
+  "akamaized.net",
+  "edgesuite.net",
+  "fastly.net",
+  "fastlylb.net",
+  "cloudfront.net",
+  "amazonaws.com",
+  "gstatic.com",
+  "azureedge.net",
+  "msecnd.net",
+  "jsdelivr.net",
+  "unpkg.com",
+  "bootstrapcdn.com",
+  "stackpathcdn.com",
+  "b-cdn.net",
+  "kxcdn.com",
+]
+
+[provider.analytics]
+location = "inline"
+type     = "domain"
+enabled  = true
+
+[[provider.analytics.category]]
+name    = "Web Analytics"
+enabled = true
+mapping = ["analytics"]
+source  = [
+  "google-analytics.com",
+  "googletagmanager.com",
+  "googleadservices.com",
+  "cloudflareinsights.com",
+  "matomo.org",
+  "plausible.io",
+  "fathom.com",
+  "segment.com",
+  "mixpanel.com",
+  "amplitude.com",
+  "hotjar.com",
+  "clarity.ms",
+  "fullstory.com",
+  "logrocket.com",
+]
+
+[[provider.analytics.category]]
+name    = "Error and Performance Monitoring"
+enabled = true
+mapping = ["telemetry"]
+source  = [
+  "sentry.io",
+  "bugsnag.com",
+  "rollbar.com",
+  "newrelic.com",
+  "datadoghq.com",
+  "elastic.co",
+  "dynatrace.com",
+  "appdynamics.com",
+]
+
+[provider.tracking]
+location = "inline"
+type     = "domain"
+enabled  = true
+
+[[provider.tracking.category]]
+name    = "Social Tracking Pixels"
+enabled = true
+mapping = ["tracking"]
+source  = [
+  "facebook.net",
+  "connect.facebook.net",
+  "analytics.twitter.com",
+  "t.co",
+  "snapchat.com",
+  "sc-static.net",
+  "ads.pinterest.com",
+  "licdn.com",
+]
+
+[[provider.tracking.category]]
+name    = "Ad Network Tracking"
+enabled = true
+mapping = ["tracking"]
+source  = [
+  "bat.bing.com",
+  "taboola.com",
+  "outbrain.com",
+  "criteo.com",
+  "adroll.com",
+  "quantserve.com",
+  "scorecardresearch.com",
+  "bluekai.com",
+  "zemanta.com",
+  "doubleclick.net",
+]
+
+
+[provider.ads]
+location = "inline"
+type     = "domain"
+enabled  = true
+
+[[provider.ads.category]]
+name    = "Ad Delivery"
+enabled = true
+mapping = ["ads"]
+source  = [
+  "googlesyndication.com",
+  "googleadservices.com",
+  "doubleclick.net",
+  "amazon-adsystem.com",
+  "media.net",
+  "moatads.com",
+  "adsrvr.org",
+  "advertising.com",
+  "adnxs.com",
+  "rubiconproject.com",
+  "pubmatic.com",
+  "openx.net",
+  "smartadserver.com",
+]
+
+
+
+
+[provider.inlineip]
+location = "inline"
+type = "ip"
+enabled = true
+
+[[provider.inlineip.category]]
+name = "RFC1918"
+enabled = true
+mapping = ["local"]
+source = [
+  "192.168.0.0/16",
+  "10.0.0.0/8",
+  "172.16.0.0/12",
+]
+
+[[provider.inlineip.category]]
+name = "localhost"
+enabled = true
+mapping = ["local"]
+source = [
+  "127.0.0.0/8",
+  "::1/128"
+]
+
+[[provider.inlineip.category]]
+name = "multicast"
+enabled = true
+mapping = ["infrastructure"]
+source = [
+  "224.0.0.0/4",
+  "169.254.0.0/16",
+  "ff00::/8",
+  "fe80::/10",
+  "255.255.255.255/32",
+]
+
+[[provider.inlineip.category]]
+name = "carrier-grade-nat"
+enabled = true
+mapping = ["infrastructure"]
+source = [
+  "100.64.0.0/10",
+]
+
+
+[[provider.inlineip.category]]
+name = "Example inline IP"
+enabled = true
+mapping = ["suspicious"]
+source = [
+  "2.57.122.210",
+  "46.101.74.113",
+  "81.192.46.45",
+  "92.118.39.56",
+  "92.118.39.72",
+  "92.118.39.76",
+  "102.88.137.80",
+  "118.193.36.205",
+  "162.223.91.130",
+  "193.32.162.151",
+  "197.5.145.102"
+]
+
+# ---------------------------------------------------------------------------
+# Remote Provider
+# ---------------------------------------------------------------------------
+
+[provider.ipfire]
+name     = "IPFire"
+location = "remote"
+type     = "domain"
+enabled  = false
+
+[[provider.ipfire.category]]
+name    = "Advertising"
+enabled = false
+tier    = 3
+mapping = ["ads"]
+source  = ["https://dbl.ipfire.org/lists/ads/domains.txt"]
+
+[[provider.ipfire.category]]
+name    = "DNS-over-HTTPS"
+enabled = false
+mapping = ["telemetry"]
+source  = ["https://dbl.ipfire.org/lists/doh/domains.txt"]
+
+[[provider.ipfire.category]]
+name    = "Malware"
+tier    = 1
+enabled = true
+mapping = ["malware"]
+source  = ["https://dbl.ipfire.org/lists/malware/domains.txt"]
+
+[[provider.ipfire.category]]
+name    = "Phishing"
+tier    = 1
+enabled = true
+mapping = ["malware"]
+source  = ["https://dbl.ipfire.org/lists/phishing/domains.txt"]
+
+[[provider.ipfire.category]]
+name    = "Social Networks"
+enabled = false
+mapping = ["social"]
+source  = ["https://dbl.ipfire.org/lists/social/domains.txt"]
+
+[provider.mock-domain]
+
+location = "remote"
+type = "domain"
+enabled = true
+
+[[provider.mock-domain.category]]
+enabled = true
+mapping = ["ads"]
+source = ["http://localhost:8080/ipfire-ads.txt"]
+
+
+[provider.mock-ip]
+
+location = "remote"
+type = "ip"
+enabled = true
+
+[[provider.mock-ip.category]]
+enabled = true
+mapping = ["suspicious"]
+source = ["http://localhost:8080/fail2ban.txt"]
+
+
+# ---------------------------------------------------------------------------
+# DNS Provider
+# ---------------------------------------------------------------------------
+
+[provider.opendns]
+name     = "OpenDNS"
+location = "dns"
+type     = "domain"
+enabled  = false
+
+[[provider.opendns.category]]
+name     = "Malware/Phishing"
+mapping  = ["malware"]
+source   = ["208.67.222.222", "208.67.220.220", "2620:119:35::35", "2620:119:53::53"]
+sinkhole = [
+  "146.112.61.104", "146.112.61.105", "146.112.61.107", "146.112.61.108",
+  "::ffff:146.112.61.104", "::ffff:146.112.61.105",
+  "::ffff:146.112.61.107", "::ffff:146.112.61.108",
+]
+
+[[provider.opendns.category]]
+name     = "Content/Adult"
+mapping  = ["social"]
+source   = ["208.67.222.123", "208.67.220.123"]
+sinkhole = ["146.112.61.106", "::ffff:146.112.61.106"]
+
+[[provider.opendns.category]]
+name     = "Suspicious/DNS Tunneling"
+enabled  = false
+mapping  = ["suspicious"]
+source   = ["208.67.222.222", "208.67.220.220", "2620:119:35::35", "2620:119:53::53"]
+sinkhole = ["146.112.61.110", "::ffff:146.112.61.110"]
+
+
+[provider.pihole]
+location = "dns"
+type = "domain"
+enabled  = false
+
+[[provider.pihole.category]]
+name = "PiHole local"
+mapping = ["ads"]
+source = ["192.168.178.2"]
+sinkhole = ["0.0.0.0", "::", "::ffff:0.0.0.0"]

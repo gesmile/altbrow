@@ -1,0 +1,13 @@
+site_name: Altbrow
+
+nav:
+  - Home: index.md
+  - Configuration API: api.md
+  - Configuration TOML: config.md
+
+plugins:
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google

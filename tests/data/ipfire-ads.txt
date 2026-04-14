@@ -1,0 +1,123 @@
+###############################################################################
+# T E S T  Domain Blocklist for IPFire
+###############################################################################
+#
+# This file contains domains that are part of the official IPFire Domain
+# Blocklist Project. It is intended for use with DNS servers and firewalls
+# that support blocklisting of known malicious or unwanted domains.
+#
+# List          : Advertising
+#
+#  Blocks domains used for ads, tracking, and ad delivery
+#
+# License       : CC BY-SA 4.0
+# Updated       : 2026-03-05T22:00:02.606195+00:00
+# Total Entries : 100
+#
+# Copyright (C) 2026 - IPFire Team
+#
+# For more information or to contribute:
+#   https://dbl.ipfire.org/
+#
+###############################################################################
+
+186576.tlnk.io
+186.6.87.194.dynamic.dol.ru
+186781.measurementapi.com
+186789.measurementapi.com
+18.6.87.194.dynamic.dol.ru
+186977.measurementapi.com
+187587.measurementapi.com
+187.6.87.194.dynamic.dol.ru
+188617.measurementapi.com
+188.6.87.194.dynamic.dol.ru
+188941.measurementapi.com
+189137.measurementapi.com
+189229.measurementapi.com
+189333.measurementapi.com
+1s7vmel6xi.execute-api.us-east-1.amazonaws.com
+1sb.illusionsplasticsurgery.com
+1.skimresources.com
+1sputnik.ru
+1st-iklan.com
+1stpool.com
+1streamline.go2cloud.org
+1to1.bbva.com
+1traff.ru
+1traf.ru
+1txt.ru
+1ul8dvwz0a.s.ad6media.fr
+1va3vpbjxq.kameleoon.eu
+1vhrgv0dy5bwe5a7.kdpwizard.app
+1vp67nxi0d.kameleoon.eu
+1vyt1eguj27.ommasign.com
+1web.me
+1wljgi8eyy.kameleoon.eu
+1x1.a-mo.net
+1x1rank.com
+1xbet.com
+edjsl.hierbasorganicas.com.mx
+ed.koeln.de
+ed.large.be
+ed.large.nl
+edmanalytics.pandahall.com
+edmodo-d.openx.net
+edm.pressflex.net
+ednplus.com
+edococounter.de
+edomz.net
+e-dot.hut1.ru
+edrone.me
+edrta.mol.im
+eds.ca.matchbox.maruhub.com
+edskes.com.site-id.nl
+edt02.net
+edtp.de
+ed.tripledart.com
+e.dtscout.com
+edua29146y.com
+eduardo.eduardofurtadog.com.br
+educate.digital-launchpad.com
+educate.monetise.com
+education.tubemogul.com
+eduesse-d.openx.net
+edu.retireone.com
+ftps.com
+eftrk.legalclaimassistant.com
+efzuf.revscale.com
+egamiplatform.tv
+egclbw.footcarelab.co.kr
+egdeb.slaterockautomation.com
+egenberger-analytics.stryzmedia.de
+egencia-d.openx.net
+e-generator.com
+egeszsegespont.hu
+e.getjibjab.com
+egger01.webtrekk.net
+eggplant.cloud
+eghuntsrizvbt.com
+eghyahl.cn
+egifter-offers.evyy.net
+e.glbimg.comvmdwuq.chadotel.com
+vmes.vertamedia.com
+vmi.datalliance.net
+vm-matomo.occitanie-en-scene.fr
+vmmmye.defender-usa.com
+vmmpxl.com
+vmm-satellite1.com
+vmonitor.ws.netease.com
+vmp.boldchat.com
+vmsbe.kassazaak.be
+vms.kassazaak.nl
+vms.kassensystemevergleich.com
+vms.laadpalenwijzer.be
+vms.pos-software.co.uk
+vmss-clarity-ingest-eus2.eastus2.cloudapp.azure.com
+vmss-clarity-tag-eus2.eastus2.cloudapp.azure.com
+vmsst.j4ksports.co.uk
+vmssts.skyenergy.com.au
+vmszxzvk.mysecondchancechurch.com
+vmtg.iesve.com
+vmt.londondentalinstitute.com
+vmtp.boxrstore.com
+vmtrk.com

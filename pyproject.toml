@@ -1,15 +1,16 @@
 [project]
 name = "altbrow"
-version = "0.1.1"
 description = "An alternative, crawler-like browser that looks beneath the surface of the semantic web."
 readme = "README.md"
 requires-python = ">=3.12"
+dynamic = ["version"]
 
 authors = [
   { name = "Electrical Smile", email = "esmile@posteo.net" }
 ]
 
-license = { text = "GPL-2.0-or-later" }
+license = "GPL-3.0-or-later"
+# license = { text = "GPL-2.0-or-later" }
 # license = { file = "LICENSE" }
 
 dependencies = [
@@ -19,15 +20,19 @@ dependencies = [
   "extruct",
   "rdflib",
   "tldextract",
-  "PyYAML"
+  "PyYAML",
+  "dnspython",
+  "maxminddb"
 ]
 
 [project.optional-dependencies]
 dev = [
+  "build",
   "ruff",
   "pytest",
   "mkdocs",
-  "mkdocstrings[python]"
+  "mkdocstrings[python]",
+  "pip-tools"
 ]
 
 [project.urls]
@@ -39,11 +44,15 @@ Source = "https://github.com/gesmile/altbrow"
 # --------------------
 
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=64", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools_scm]
+version_scheme = "post-release"
+local_scheme = "no-local-version"
+
 [tool.setuptools.packages.find]
-include = ["app"]
+include = ["altbrow"]
 
 [tool.ruff]
 line-length = 88
@@ -58,4 +67,4 @@ line_length = 88
 typeCheckingMode = "basic"
 
 [project.scripts]
-altbrow = "app.main:main"
+altbrow = "altbrow.main:main"

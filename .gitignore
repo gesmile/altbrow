@@ -17,12 +17,15 @@ __pycache__/
 # --- OS / Editor ---
 .DS_Store
 Thumbs.db
+.stack.md
 
 # --- Test / build ---
 .pytest_cache/
 .mypy_cache/
 *.egg-info/
 .coverage
+.altbrow.cache
+config/.altbrow.cache
 dist/
 build/
 

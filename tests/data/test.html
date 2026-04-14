@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>altbrow test page</title>
+
+  <!-- analytics provider hit -->
+  <script src="https://www.google-analytics.com/analytics.js"></script>
+  <script src="https://www.googletagmanager.com/gtm.js"></script>
+
+  <!-- cdn provider hit -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+
+  <!-- tracking provider hit -->
+  <script src="https://connect.facebook.net/en_US/fbevents.js"></script>
+
+  <!-- ads provider hit -->
+  <script src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+  <script src="https://www.googleadservices.com/pagead/conversion.js"></script>
+
+  <!-- telemetry provider hit -->
+  <script src="https://browser.sentry-cdn.com/7.0.0/bundle.min.js"></script>
+
+</head>
+<body>
+  <h1>altbrow integration test page</h1>
+  <p>This page contains known domains and IPs for testing provider classification.</p>
+
+  <!-- social provider hit -->
+  <a href="https://www.instagram.com/test">Instagram</a>
+  <a href="https://www.facebook.com/test">Facebook</a>
+
+  <!-- RFC1918 private IP — should hit inlineip/local -->
+  <a href="http://10.0.0.1/admin">Internal admin (RFC1918)</a>
+  <a href="http://192.168.1.1/router">Router (RFC1918)</a>
+
+  <!-- suspicious IP from test list — should hit inlineip/suspicious if resolve-domains=true -->
+  <a href="http://2.57.122.210/payload">Suspicious IP</a>
+
+  <!-- external unknown domain — should be unknown -->
+  <a href="https://www.example-unknown-domain-xyz.com">Unknown domain</a>
+
+  <!-- infrastructure provider hit -->
+  <a href="https://schema.org/Article">Schema.org</a>
+  <link rel="alternate" type="application/json" href="https://json-ld.org/spec">
+
+  <!-- JSON-LD structured data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "altbrow test page",
+    "description": "Integration test page for altbrow domain and IP classification",
+    "url": "http://localhost:18080/test.html",
+    "publisher": {
+      "@type": "Organization",
+      "name": "altbrow test",
+      "@id": "https://schema.org/testpage"
+    }
+  }
+  </script>
+
+  <!-- doubleclick tracking hit -->
+  <img src="https://ad.doubleclick.net/ddm/trackimp/test.gif" width="1" height="1">
+
+  <!-- second RFC1918 range -->
+  <img src="http://172.16.0.1/pixel.gif" width="1" height="1">
+
+</body>
+</html>
