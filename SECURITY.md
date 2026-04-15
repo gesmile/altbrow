@@ -7,4 +7,4 @@ Per the terms of the GPLv3 license, altbrow is offered "as is" and without any g
 
 ## Reporting a Suspected Vulnerability
 
-If you believe you've uncovered a security vulnerability and wish to report it confidentially, you may do so by emailing esmile@posteo.net. Please ensure that your report meets all necessary information.
+If you believe you've uncovered a security vulnerability and wish to report it confidentially, you may do so by emailing 6059405+gesmile@users.noreply.github.com. Please ensure that your report meets all necessary information.
