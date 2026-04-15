@@ -32,6 +32,7 @@ dev = [
   "pytest",
   "mkdocs",
   "mkdocstrings[python]",
+  "mypy",
   "pip-tools"
 ]
 
@@ -68,3 +69,7 @@ typeCheckingMode = "basic"
 
 [project.scripts]
 altbrow = "altbrow.main:main"
+
+# [tool.mypy]
+# ignore_missing_imports = true
+# disable_error_code = ["attr-defined", "import-untyped"]

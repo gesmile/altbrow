@@ -365,3 +365,46 @@ name = "PiHole local"
 mapping = ["ads"]
 source = ["192.168.178.2"]
 sinkhole = ["0.0.0.0", "::", "::ffff:0.0.0.0"]
+
+# ---------------------------------------------------------------------------
+# Local Glob Provider — provider.d/
+# Tests glob expansion and hosts-format parsing.
+# Tier is derived automatically from location=local (tier 1).
+# ---------------------------------------------------------------------------
+
+[provider.local-domains]
+location = "local"
+type     = "domain"
+enabled  = true
+
+[[provider.local-domains.category]]
+name    = "Local domain list"
+mapping = ["suspicious"]
+source  = ["./provider.d/domain_*.txt"]
+
+# ---------------------------------------------------------------------------
+
+[provider.local-ips]
+location = "local"
+type     = "ip"
+enabled  = true
+
+[[provider.local-ips.category]]
+name    = "Local IP list"
+mapping = ["suspicious"]
+source  = ["./provider.d/ip_*.txt"]
+
+# ---------------------------------------------------------------------------
+# Special provider — explicit tier 0, single non-glob file
+# ---------------------------------------------------------------------------
+
+[provider.local-special]
+location = "local"
+type     = "domain"
+enabled  = true
+
+[[provider.local-special.category]]
+name    = "Special tier-0 list"
+tier    = 0
+mapping = ["suspicious"]
+source  = ["./provider.d/special.db"]

@@ -14,93 +14,190 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Create venv
+      - name: "Create venv"
         run: python3 -m venv .venv
 
-      - name: Install build deps
+      - name: "Install build deps"
         run: |
           .venv/bin/pip install --upgrade pip
           .venv/bin/pip install .[dev]
 
-      - name: Validate config
-        run: |
-          set -e
-          .venv/bin/python -m altbrow --validate-config --config="tests/data/altbrow.toml"
+      # --- 0. clean runner state ---
+      - name: "Clean runner altbrow config"
+        run: rm -rf ~/.altbrow
 
-      - name: Build package
+      # --- 1. first-run default config ---
+      - name: "Generate default config"
+        run: .venv/bin/python -m altbrow --validate-config
+
+      - name: "Validate default config verbose"
+        run: .venv/bin/python -m altbrow -vv --validate-config
+
+      - name: "Build cache — no provider (expected: exit 3)"
+        id: build_no_provider
+        continue-on-error: true
+        run: |
+          set +e
+          .venv/bin/python -m altbrow --build-cache
+          CODE=$?
+          echo "Exit code: $CODE"
+          [ $CODE -eq 3 ] && exit 0 || exit $CODE
+
+      # --- 3. enable provider and re-validate ---
+      - name: "Enable provider in default config"
+        if: always()
+        run: |
+          sed -i 's/use-provider = false/use-provider = true/' ~/.altbrow/altbrow.toml
+          grep "use-provider" ~/.altbrow/altbrow.toml
+
+      - name: "Validate config with provider enabled"
+        if: always()
+        run: .venv/bin/python -m altbrow -v --validate-config
+
+      - name: "Validate config with provider enabled verbose"
+        if: always()
+        run: .venv/bin/python -m altbrow -vv --validate-config
+
+      # --- 4. GeoIP smoke test: patch maxmind enabled, mock tar.gz ---
+      - name: "Enable maxmind in default provider config"
+        if: always()
+        run: |
+          sed -i '/\[provider\.maxmind\]/,/^\[/ s/enabled *= *false/enabled = true/' \
+            ~/.altbrow/provider.toml
+          grep -A3 "\[provider.maxmind\]" ~/.altbrow/provider.toml
+
+      - name: "Create mock GeoIP tar.gz"
+        if: always()
+        run: |
+          mkdir -p /tmp/geoip-mock/GeoLite2-Country_20260101
+          touch /tmp/geoip-mock/GeoLite2-Country_20260101/GeoLite2-Country.mmdb
+          tar -czf ~/.altbrow/GeoLite2-Country_20260101.tar.gz \
+            -C /tmp/geoip-mock GeoLite2-Country_20260101/GeoLite2-Country.mmdb
+          ls -la ~/.altbrow/
+
+      - name: "Build cache with GeoIP smoke test"
+        if: always()
+        run: .venv/bin/python -m altbrow --build-cache -v
+
+      # --- 5. version check ---
+      - name: "Version check"
+        if: always()
+        run: .venv/bin/python -m altbrow -V
+
+      # --- 6. build artifacts ---
+      - name: "Build package"
+        if: always()
         run: .venv/bin/python -m build
 
-      - name: Build docs
+      - name: "Build docs"
+        if: always()
         run: .venv/bin/mkdocs build -f docs/mkdocs.yml
 
   validate:
     runs-on: ubuntu-latest
-    # parallel to build — ruff and pytest don't need a built package
     steps:
       - uses: actions/checkout@v4
 
-      - name: Create venv
+      - name: "Create venv"
         run: python3 -m venv .venv
 
-      - name: Install dev deps
+      - name: "Install dev deps"
         run: |
           .venv/bin/pip install --upgrade pip
           .venv/bin/pip install .[dev]
 
-      - name: Ruff
+      - name: "Ruff"
         run: .venv/bin/ruff check altbrow
 
-      - name: Pytest
-        run: .venv/bin/pytest
+      - name: "Mypy (still unhandled errors, TODO: remove '|| true')"
+        run: .venv/bin/mypy altbrow --ignore-missing-imports || true
+
+      - name: "Pytest"
+        run: .venv/bin/pytest tests/test_import.py tests/test_resolve.py tests/test_provider_config.py tests/test_cli.py -v
 
   integration:
     runs-on: ubuntu-latest
     needs: [ build, validate ]
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Create venv
+      - name: "Create venv"
         run: python3 -m venv .venv
 
-      - name: Install deps
+      - name: "Install deps"
         run: |
           .venv/bin/pip install --upgrade pip
           .venv/bin/pip install .[dev]
 
-      - name: Start mock server
+      - name: "Start mock server"
         run: |
-          python3 -m http.server 8080 --directory tests/data &
-          for i in $(seq 1 10); do
-            python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/')" 2>/dev/null && break
+          fuser -k 8080/tcp 2>/dev/null || true
+          sleep 2
+          # verify port is free before starting
+          if curl -s http://localhost:8080/ > /dev/null 2>&1; then
+            echo "ERROR: port 8080 still in use after fuser"
+            fuser 8080/tcp || true
+            exit 1
+          fi
+          echo "Port 8080 free, starting server..."
+          nohup python3 -m http.server 8080 \
+            --directory $(pwd)/tests/data \
+            > /tmp/mock-server.log 2>&1 &
+          sleep 1
+          echo "Serving from: $(pwd)/tests/data"
+          ls $(pwd)/tests/data
+          curl -s -o /dev/null -w "ipfire-ads.txt: %{http_code}\n" http://localhost:8080/ipfire-ads.txt
+          curl -s -o /dev/null -w "test.html: %{http_code}\n" http://localhost:8080/test.html
+          echo "Waiting for mock server..."
+          for i in $(seq 1 30); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/ipfire-ads.txt)
+            if [ "$STATUS" = "200" ]; then
+              echo "Mock server ready after ${i}s"
+              break
+            fi
             sleep 1
+            if [ $i -eq 30 ]; then
+              echo "Mock server failed to start (last status: $STATUS)"
+              cat /tmp/mock-server.log
+              exit 1
+            fi
           done
 
-      - name: Build cache with mock provider
+      - name: "Build cache with test provider config"
         run: |
           .venv/bin/python -m altbrow \
             --config="tests/data/altbrow.toml" \
-            --build-cache
+            --build-cache -v
 
-      - name: Run integration tests
+      - name: "Validate test config verbose"
+        run: |
+          .venv/bin/python -m altbrow \
+            --config="tests/data/altbrow.toml" \
+            --validate-config -vv
+
+      - name: "Validate test config"
+        run: |
+          .venv/bin/python -m altbrow \
+            --config="tests/data/altbrow.toml" \
+            --validate-config
+
+      - name: "Smoke test — localhost"
+        run: |
+          .venv/bin/python -m altbrow \
+            --config="tests/data/altbrow.toml" \
+            -vv http://localhost:8080/test.html
+
+      - name: "Smoke test — 127.0.0.1"
+        run: |
+          .venv/bin/python -m altbrow \
+            --config="tests/data/altbrow.toml" \
+            -vv http://127.0.0.1:8080/test.html
+
+      - name: "Run cache tests"
         run: .venv/bin/pytest tests/test_cache.py -v
 
-#   integration-dns:
-#     runs-on: ubuntu-latest
-#     needs: validate
-#     # only runs when PIHOLE_IP is configured as repository variable
-#     if: vars.PIHOLE_IP != ''
-#     steps:
-#       - uses: actions/checkout@v4
-#
-#       - name: Create venv
-#         run: python3 -m venv .venv
-#
-#       - name: Install deps
-#         run: |
-#           .venv/bin/pip install --upgrade pip
-#           .venv/bin/pip install .[dev]
-#
-#       - name: Run DNS provider tests
-#         env:
-#           ALTBROW_PIHOLE_IP: ${{ vars.PIHOLE_IP }}
-#         run: .venv/bin/pytest tests/test_dns_provider.py -v
+      - name: "Run integration tests"
+        run: .venv/bin/pytest tests/test_integration.py -v

@@ -14,16 +14,6 @@ from .config import LOCATION_DEFAULT_TIER
 
 logger = logging.getLogger(__name__)
 
-# Metadata key pattern: "# Key : Value" or "# key: value"
-_META_RE = re.compile(
-  r'^[ \t]{0,9}#[ \t]{0,2}([A-Za-z0-9][A-Za-z0-9._ -]{0,31})[ \t]{0,9}:[ \t]{0,5}(.{0,256})$'
-)
-
-_ALLOWED_META_KEYS = {
-  "name", "list", "license", "source", "created",
-  "updated", "version", "description", "total entries",
-}
-
 # hosts-format: line starts with an IP address token followed by whitespace
 _HOSTS_LINE_RE = re.compile(r'^\s*([0-9a-fA-F.:]+)\s+(.+)')
 
@@ -100,49 +90,22 @@ def parse_entries(text: str) -> list[str]:
   return entries
 
 
-def parse_list(text: str) -> tuple[dict, list[str]]:
-  """Parse a domain or IP list, extracting metadata and entries.
+def parse_list(text: str) -> list[str]:
+  """Parse a domain or IP list and return entries.
 
-  Reads optional metadata from leading comment lines (``# key: value``),
-  then delegates entry extraction to ``parse_entries()`` which handles
-  both altbrow list format and hosts file format.
-
-  Metadata is only read from leading comment lines before the first
-  non-comment line — same convention as altbrow list format.
+  Delegates to ``parse_entries()`` which handles both altbrow list format
+  and hosts file format.
 
   Args:
     text: Raw text content of the list file or HTTP response.
 
   Returns:
-    Tuple of:
-      meta    - dict of parsed metadata keys (lowercased, spaces→underscore)
-      entries - list of domain or IP strings from parse_entries()
+    List of domain or IP strings from parse_entries().
   """
-  meta: dict = {}
-  header_done = False
-
-  for line in text.splitlines():
-    stripped = line.strip()
-    if not stripped:
-      continue
-    if stripped.startswith("#"):
-      if not header_done:
-        m = _META_RE.match(stripped)
-        if m:
-          key = m.group(1).strip().lower().replace(" ", "_")
-          val = m.group(2).strip()
-          if key in _ALLOWED_META_KEYS or any(
-            key == k.replace(" ", "_") for k in _ALLOWED_META_KEYS
-          ):
-            meta[key] = val
-      continue
-    header_done = True
-    break  # stop at first non-comment line — entries handled by parse_entries
-
-  return meta, parse_entries(text)
+  return parse_entries(text)
 
 
-def fetch_remote_source(url: str, timeout: int = 15) -> tuple[dict, list[str]]:
+def fetch_remote_source(url: str, timeout: int = 15) -> list[str]:
   """Fetch a remote list URL and parse it.
 
   Args:
@@ -150,7 +113,7 @@ def fetch_remote_source(url: str, timeout: int = 15) -> tuple[dict, list[str]]:
     timeout: Request timeout in seconds.
 
   Returns:
-    Tuple of (meta, entries) from parse_list().
+    List of domain or IP strings from parse_list().
 
   Raises:
     requests.exceptions.RequestException: On network or HTTP errors.
@@ -160,14 +123,11 @@ def fetch_remote_source(url: str, timeout: int = 15) -> tuple[dict, list[str]]:
   response = requests.get(url, timeout=timeout)
   response.raise_for_status()
 
-  meta, entries = parse_list(response.text)
+  entries = parse_list(response.text)
 
-  logger.debug(
-    "Fetched %s: %d entries, meta=%s",
-    url, len(entries), meta
-  )
+  logger.debug("Fetched %s: %d entries", url, len(entries))
 
-  return meta, entries
+  return entries
 
 
 def fetch_remote_provider(
@@ -185,13 +145,13 @@ def fetch_remote_provider(
 
   Returns:
     List of tuples: (entry, context) where context contains:
-      category, provider, provider_location, category_name, meta
+      category, provider, provider_location, category_name
   """
   results = []
   ptype = p.get("type")
 
   # fetch each URL only once
-  url_cache: dict[str, tuple[dict, list[str]]] = {}
+  url_cache: dict[str, list[str]] = {}
 
   for cat in p.get("category", []):
     if not cat.get("enabled", True):
@@ -208,15 +168,13 @@ def fetch_remote_provider(
           url_cache[url] = fetch_remote_source(url)
           logger.info(
             "Provider '%s' fetched %d entries from %s",
-            pname, len(url_cache[url][1]), url
+            pname, len(url_cache[url]), url
           )
         except Exception as exc:
           logger.warning("Failed to fetch '%s' from %s: %s", pname, url, exc)
-          url_cache[url] = ({}, [])
+          url_cache[url] = []
 
-      meta, entries = url_cache[url]
-
-      for entry in entries:
+      for entry in url_cache[url]:
         entry = entry.strip().lower()
         if not entry:
           continue
@@ -228,7 +186,6 @@ def fetch_remote_provider(
             "provider_location": "remote",
             "category_name":     cat_name,
             "tier":              tier,
-            "meta":              meta,
             "ptype":             ptype,
           }))
 
