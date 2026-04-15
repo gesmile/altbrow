@@ -1,7 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="altbrow integration test page for domain and IP classification.">
   <title>altbrow test page</title>
 
   <!-- analytics provider hit -->
@@ -21,50 +24,176 @@
   <!-- telemetry provider hit -->
   <script src="https://browser.sentry-cdn.com/7.0.0/bundle.min.js"></script>
 
-</head>
-<body>
-  <h1>altbrow integration test page</h1>
-  <p>This page contains known domains and IPs for testing provider classification.</p>
-
-  <!-- social provider hit -->
-  <a href="https://www.instagram.com/test">Instagram</a>
-  <a href="https://www.facebook.com/test">Facebook</a>
-
-  <!-- RFC1918 private IP — should hit inlineip/local -->
-  <a href="http://10.0.0.1/admin">Internal admin (RFC1918)</a>
-  <a href="http://192.168.1.1/router">Router (RFC1918)</a>
-
-  <!-- suspicious IP from test list — should hit inlineip/suspicious if resolve-domains=true -->
-  <a href="http://2.57.122.210/payload">Suspicious IP</a>
-
-  <!-- external unknown domain — should be unknown -->
-  <a href="https://www.example-unknown-domain-xyz.com">Unknown domain</a>
-
-  <!-- infrastructure provider hit -->
-  <a href="https://schema.org/Article">Schema.org</a>
-  <link rel="alternate" type="application/json" href="https://json-ld.org/spec">
-
-  <!-- JSON-LD structured data -->
+  <!--
+    JSON-LD PAIR 1 - identical match with Microdata block 1 (WebPage)
+    @type, name, url all identical - strict + loose match expected
+  -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "WebPage",
+    "@id": "https://example-test.local/page",
     "name": "altbrow test page",
-    "description": "Integration test page for altbrow domain and IP classification",
-    "url": "http://localhost:18080/test.html",
-    "publisher": {
-      "@type": "Organization",
-      "name": "altbrow test",
-      "@id": "https://schema.org/testpage"
-    }
+    "url": "http://localhost:8080/test.html",
+    "description": "Integration test page for altbrow domain and IP classification"
   }
   </script>
 
-  <!-- doubleclick tracking hit -->
-  <img src="https://ad.doubleclick.net/ddm/trackimp/test.gif" width="1" height="1">
+  <!--
+    JSON-LD PAIR 2 - slight deviation from Microdata block 2 (Organization)
+    @type identical, name differs slightly - loose match, strict fail
+  -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "@id": "https://example-test.local/org",
+    "name": "altbrow test organization",
+    "url": "https://github.com/gesmile/altbrow"
+  }
+  </script>
 
-  <!-- second RFC1918 range -->
-  <img src="http://172.16.0.1/pixel.gif" width="1" height="1">
+  <!--
+    JSON-LD PAIR 3 - independent, no Microdata counterpart
+    BreadcrumbList has no matching Microdata block - standalone
+  -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home",  "item": "http://localhost:8080/index.html" },
+      { "@type": "ListItem", "position": 2, "name": "Test",  "item": "http://localhost:8080/test.html"  }
+    ]
+  }
+  </script>
+
+</head>
+
+<body>
+
+<header>
+  <h1>altbrow test page</h1>
+  <nav aria-label="main navigation">
+    <ul>
+      <li><a href="index.html">Home</a></li>
+      <li><a href="test.html" aria-current="page">Test</a></li>
+      <li><a href="https://github.com/gesmile/altbrow" rel="noreferrer">GitHub</a></li>
+    </ul>
+  </nav>
+</header>
+
+<main>
+
+  <section id="provider-hits" aria-labelledby="provider-hits-title">
+    <header>
+      <h2 id="provider-hits-title">Provider Classification Targets</h2>
+      <p>Known domains and IPs for provider hit testing.</p>
+    </header>
+
+    <h3>Social</h3>
+    <ul>
+      <li><a href="https://www.instagram.com/test">Instagram</a></li>
+      <li><a href="https://www.facebook.com/test">Facebook</a></li>
+    </ul>
+
+    <h3>Infrastructure</h3>
+    <ul>
+      <li><a href="https://schema.org/Article">Schema.org</a></li>
+      <li><a href="https://json-ld.org/spec">JSON-LD spec</a></li>
+    </ul>
+
+    <h3>Unknown external domain</h3>
+    <ul>
+      <li><a href="https://www.example-unknown-domain-xyz.com">Unknown domain</a></li>
+    </ul>
+  </section>
+
+  <section id="ip-targets" aria-labelledby="ip-targets-title">
+    <header>
+      <h2 id="ip-targets-title">IP Classification Targets</h2>
+      <p>RFC1918 and suspicious IPs for classification testing.</p>
+    </header>
+
+    <h3>RFC1918 private IPs</h3>
+    <ul>
+      <li><a href="http://10.0.0.1/admin">Internal admin (10.x)</a></li>
+      <li><a href="http://192.168.1.1/router">Router (192.168.x)</a></li>
+    </ul>
+
+    <h3>Suspicious IP</h3>
+    <ul>
+      <li><a href="http://2.57.122.210/payload">Suspicious IP</a></li>
+    </ul>
+
+    <figure>
+      <img src="http://172.16.0.1/pixel.gif" width="1" height="1" alt="RFC1918 172.16 pixel">
+      <figcaption>172.16.0.1 RFC1918 asset hit</figcaption>
+    </figure>
+
+    <figure>
+      <img src="https://ad.doubleclick.net/ddm/trackimp/test.gif" width="1" height="1" alt="tracking pixel">
+      <figcaption>doubleclick.net tracking + ads hit</figcaption>
+    </figure>
+  </section>
+
+  <section id="structured-data" aria-labelledby="structured-data-title">
+    <header>
+      <h2 id="structured-data-title">Structured Data</h2>
+      <p>Microdata/JSON-LD pairs for consistency validation testing.</p>
+    </header>
+
+    <!-- MICRODATA PAIR 1: WebPage - identical to JSON-LD block 1 -->
+    <article
+      itemscope
+      itemtype="https://schema.org/WebPage"
+      itemid="https://example-test.local/page"
+      id="microdata-webpage"
+    >
+      <h3>Page info</h3>
+      <span itemprop="name">altbrow test page</span>
+      <meta itemprop="url" content="http://localhost:8080/test.html">
+      <meta itemprop="description" content="Integration test page for altbrow domain and IP classification">
+    </article>
+
+    <!-- MICRODATA PAIR 2: Organization - slight deviation from JSON-LD block 2 -->
+    <!-- JSON-LD: "altbrow test organization" / Microdata: "altbrow Test Organization" -->
+    <article
+      itemscope
+      itemtype="https://schema.org/Organization"
+      itemid="https://example-test.local/org"
+      id="microdata-org"
+    >
+      <h3>Organization info</h3>
+      <span itemprop="name">altbrow Test Organization</span>
+      <link itemprop="url" href="https://github.com/gesmile/altbrow">
+    </article>
+
+    <!-- MICRODATA PAIR 3: Person - no JSON-LD counterpart, standalone -->
+    <article
+      itemscope
+      itemtype="https://schema.org/Person"
+      id="microdata-person"
+    >
+      <h3>Author</h3>
+      <span itemprop="name">Ada Lovelace</span>
+      <a href="mailto:ada@example-test.local" itemprop="email">ada@example-test.local</a>
+    </article>
+
+  </section>
+
+</main>
+
+<footer id="page-footer">
+  <article id="imprint" aria-labelledby="imprint-title">
+    <h2 id="imprint-title">Imprint</h2>
+    <address itemscope itemtype="https://schema.org/Person">
+      <span itemprop="name">Test Author</span><br>
+      <a href="mailto:test@example-test.local" itemprop="email">test@example-test.local</a>
+    </address>
+    <p><time datetime="2026-01-01">2026</time></p>
+  </article>
+</footer>
 
 </body>
 </html>

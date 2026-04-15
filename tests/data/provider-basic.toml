@@ -1,0 +1,187 @@
+# tests/data/provider-basic.toml
+# Integration test provider config — no DNS, no GeoIP
+# mock-remote uses localhost:8080 served by conftest.py mock server
+
+[meta]
+version = 1
+created = "2026-04-15"
+
+[resolve]
+resolve-domains = false
+resolver        = ["os"]
+resolver-timeout = 2
+
+# ---------------------------------------------------------------------------
+# Inline providers (same as default)
+# ---------------------------------------------------------------------------
+
+[provider.infrastructure]
+location = "inline"
+type     = "domain"
+enabled  = true
+
+[[provider.infrastructure.category]]
+name    = "Semantic Web Standards"
+mapping = ["infrastructure"]
+source  = [
+  "schema.org", "w3.org", "xmlns.com", "json-ld.org",
+  "purl.org", "dublincore.org", "ogp.me",
+]
+
+# ---------------------------------------------------------------------------
+
+[provider.cdn]
+location = "inline"
+type     = "domain"
+enabled  = true
+
+[[provider.cdn.category]]
+name    = "Major CDN"
+mapping = ["cdn"]
+source  = [
+  "cdnjs.cloudflare.com", "cloudfront.net", "fastly.net",
+  "gstatic.com", "akamai.net",
+]
+
+# ---------------------------------------------------------------------------
+
+[provider.analytics]
+location = "inline"
+type     = "domain"
+enabled  = true
+
+[[provider.analytics.category]]
+name    = "Web Analytics"
+mapping = ["analytics"]
+source  = [
+  "google-analytics.com", "googletagmanager.com", "googleadservices.com",
+]
+
+[[provider.analytics.category]]
+name    = "Telemetry"
+mapping = ["telemetry"]
+source  = ["sentry.io", "sentry-cdn.com"]
+
+# ---------------------------------------------------------------------------
+
+[provider.tracking]
+location = "inline"
+type     = "domain"
+enabled  = true
+
+[[provider.tracking.category]]
+name    = "Social Tracking"
+mapping = ["tracking"]
+source  = ["connect.facebook.net", "facebook.net", "doubleclick.net"]
+
+# ---------------------------------------------------------------------------
+
+[provider.ads]
+location = "inline"
+type     = "domain"
+enabled  = true
+
+[[provider.ads.category]]
+name    = "Ad Delivery"
+mapping = ["ads"]
+source  = [
+  "googlesyndication.com", "googleadservices.com", "doubleclick.net",
+]
+
+# ---------------------------------------------------------------------------
+
+[provider.inlineip]
+location = "inline"
+type     = "ip"
+enabled  = true
+
+[[provider.inlineip.category]]
+name    = "RFC1918"
+tier    = 0
+mapping = ["local"]
+source  = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+
+[[provider.inlineip.category]]
+name    = "Loopback"
+mapping = ["local"]
+source  = ["127.0.0.0/8", "::1/128"]
+
+[[provider.inlineip.category]]
+name    = "Suspicious IPs"
+mapping = ["suspicious"]
+source  = ["2.57.122.210"]
+
+# ---------------------------------------------------------------------------
+# Local glob providers — provider.d/
+# ---------------------------------------------------------------------------
+
+[provider.local-domains]
+location = "local"
+type     = "domain"
+enabled  = true
+
+[[provider.local-domains.category]]
+name    = "Local domain list"
+mapping = ["suspicious"]
+source  = ["./provider.d/domain_*.txt"]
+
+[provider.local-ips]
+location = "local"
+type     = "ip"
+enabled  = true
+
+[[provider.local-ips.category]]
+name    = "Local IP list"
+mapping = ["suspicious"]
+source  = ["./provider.d/ip_*.txt"]
+
+[provider.local-special]
+location = "local"
+type     = "domain"
+enabled  = true
+
+[[provider.local-special.category]]
+name    = "Special tier-0 list"
+tier    = 0
+mapping = ["suspicious"]
+source  = ["./provider.d/special.db"]
+
+# ---------------------------------------------------------------------------
+# Remote mock provider (served by conftest.py mock server)
+# ---------------------------------------------------------------------------
+
+[provider.mock-domain]
+location = "remote"
+type     = "domain"
+enabled  = true
+
+[[provider.mock-domain.category]]
+name    = "Mock ads list"
+mapping = ["ads"]
+source  = ["http://localhost:8080/ipfire-ads.txt"]
+
+[provider.mock-ip]
+location = "remote"
+type     = "ip"
+enabled  = true
+
+[[provider.mock-ip.category]]
+name    = "Mock suspicious IPs"
+mapping = ["suspicious"]
+source  = ["http://localhost:8080/fail2ban.txt"]
+
+# ---------------------------------------------------------------------------
+# Remote mock provider (served by conftest.py mock server)
+# ---------------------------------------------------------------------------
+
+[provider.system-hosts]
+name     = "hosts file"
+location = "local"
+type     = "domain"
+enabled  = true
+
+[[provider.system-hosts.category]]
+name    = "linux"
+tier    = 0
+mapping = ["local"]
+source  = ["/etc/hosts"]

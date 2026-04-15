@@ -1,0 +1,6 @@
+# altbrow test domain list — hosts format
+# provider.d/domain_hosts.txt
+
+0.0.0.0 test-hosts-domain.example.com
+0.0.0.0 another-hosts-domain.example.com
+127.0.0.1 localhost-style-entry.example.com

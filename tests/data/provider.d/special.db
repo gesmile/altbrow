@@ -1,0 +1,6 @@
+# altbrow test special list — tier 0, used for tier-overwrite test
+# provider.d/special.db
+# configured with tier = 0 in provider.toml
+
+vmtrk.com
+vmsbe.kassazaak.be

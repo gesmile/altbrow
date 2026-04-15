@@ -14,6 +14,7 @@ import tomllib
 VALID_PROFILES = {"passive", "browser", "consented"}
 ALLOWED_LOCATIONS = {"local", "inline", "remote", "dns"}
 ALLOWED_TYPES = {"ip", "domain"}
+ALLOWED_LOCAL_HOSTNAMES = { "localhost", "localhost.localdomain", "local", "ip6-localhost", "ip6-loopback", "broadcasthost", }
 ALLOWED_MAPPINGS = {
     "ads",
     "analytics",
@@ -659,7 +660,7 @@ source  = ["https://dbl.ipfire.org/lists/violence/domains.txt"]
 [provider.stevenblack]
 location = "remote"
 type     = "domain"
-enabled  = true
+enabled  = false
 
 [[provider.stevenblack.category]]
 name    = "PIHole"
@@ -680,16 +681,19 @@ enabled  = false
 
 [[provider.maxmind.category]]
 name    = "Country"
+enabled  = true
 mapping = ["geoip"]
 source  = ["./GeoLite2-Country_*.tar.gz"]
 
 [[provider.maxmind.category]]
 name    = "ASN"
+enabled  = false
 mapping = ["geoip"]
 source  = ["./GeoLite2-ASN_*.tar.gz"]
 
 [[provider.maxmind.category]]
 name    = "City"
+enabled  = false
 mapping = ["geoip"]
 source  = ["./GeoLite2-City_*.tar.gz"]
 
@@ -740,9 +744,8 @@ sinkhole = ["146.112.61.110", "::ffff:146.112.61.110"]
 
 # --------------------
 
-# uses the list of stevenblack
-
 [provider.pihole]
+# uses the list of stevenblack
 location = "dns"
 type     = "domain"
 enabled  = false
@@ -754,8 +757,8 @@ source   = ["192.168.1.1"]
 sinkhole = ["0.0.0.0", "::", "::ffff:0.0.0.0"]
 
 # ---------------------------------------------------------------------------
-# Tier 0 Provider
-# defaults, normally you do not need to change, only activate your hosts OS
+# Tier 0 Provider: defaults and network standards
+# normally you do not need to change, only activate for your working hosts OS
 # ---------------------------------------------------------------------------
 
 [provider.system-hosts]
@@ -765,18 +768,18 @@ type     = "domain"
 enabled  = false
 
 [[provider.system-hosts.category]]
-name    = "linux"
+name    = "unix"
 tier    = 0
-enabled = false
+enabled = true
 mapping = ["local"]
 source  = ["/etc/hosts"]
 
 [[provider.system-hosts.category]]
 name    = "windows"
 tier    = 0
-enabled = true
+enabled = false
 mapping = ["local"]
-source  = ["C:\\Windows\\System32\\drivers\\etc\\hosts"]
+source  = ["C:\\\\Windows\\\\System32\\\\drivers\\\\etc\\\\hosts"]
 
 # --------------------
 
@@ -842,6 +845,24 @@ tier    = 0
 mapping = ["infrastructure"]
 source  = [
   "100.64.0.0/10",
+]
+
+# --------------------
+
+[provider.loopback]
+location = "inline"
+type     = "domain"
+enabled  = true
+
+[[provider.loopback.category]]
+name    = "hostname"
+tier    = 0
+mapping = ["local"]
+source  = [
+  "localhost",
+  "localhost.localdomain",
+  "ip6-localhost",
+  "ip6-loopback",
 ]
 
 
@@ -1286,7 +1307,7 @@ def validate_provider_config(cfg: dict) -> None:
 
         elif location == "inline":
           if ptype == "domain":
-            if "." not in src:
+            if "." not in src and src not in ALLOWED_LOCAL_HOSTNAMES:
               raise ConfigError(f"{cname} invalid domain '{src}'")
 
           elif ptype == "ip":

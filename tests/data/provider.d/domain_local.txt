@@ -1,0 +1,9 @@
+# altbrow test domain list — plain format
+# provider.d/domain_local.txt
+#
+# edjsl.hierbasorganicas.com.mx is also in ipfire-ads.txt (remote, tier 2)
+# local provider resolves to tier 1 — lower tier wins
+
+edjsl.hierbasorganicas.com.mx
+vmtrk.com
+test-local-domain.example.com

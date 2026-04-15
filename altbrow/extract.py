@@ -143,7 +143,7 @@ def extract_data(fetch_result: dict, cache_path: Path, config: dict | None = Non
     _add_geo(target_result, target_result["value"])
   classified_domains = [target_result] if target_result else []
 
-  for domain, kinds in sorted(domain_occurrence.items()):
+  for netloc, kinds in sorted(domain_occurrence.items()):
     if "asset" in kinds and "link" in kinds:
       occurrence = "MIXED"
     elif "asset" in kinds:
@@ -151,10 +151,21 @@ def extract_data(fetch_result: dict, cache_path: Path, config: dict | None = Non
     else:
       occurrence = "LINK_ONLY"
 
-    result = classify_domain(domain, page_domain, cache_path, config)
-    result["occurrence"] = occurrence
-    _add_geo(result, domain)
-    classified_domains.append(result)
+    # strip port for IP/domain check
+    host = netloc.rsplit(":", 1)[0].strip("[]")
+
+    if _is_ip_address(host):
+      ip_result = classify_ip(host, cache_path)
+      ip_result["occurrence"] = occurrence
+      if geo_readers:
+        from .geoip import lookup_ip as _geo_ip, format_geo
+        ip_result["geo"] = format_geo(_geo_ip(host, geo_readers))
+      classified_ips.append(ip_result)
+    else:
+      result = classify_domain(netloc, page_domain, cache_path, config)
+      result["occurrence"] = occurrence
+      _add_geo(result, netloc)
+      classified_domains.append(result)
 
   # ---------- Cookies ----------
   raw_cookies        = headers.get("Set-Cookie")

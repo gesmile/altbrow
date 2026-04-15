@@ -3,7 +3,7 @@
 Alternative crawler-like browser for a deep look into a website's semantic structure and external dependencies.
 Includes a provider system for domain and IP classification via inline lists, local files, remote feeds, and DNS resolvers.
 
-> Early alpha — built with AI assistance.
+> Alpha version — built with AI assistance.
 
 ## Goals
 

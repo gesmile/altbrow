@@ -100,17 +100,16 @@ def _is_cidr(value: str) -> bool:
   except ValueError:
     return False
 
-
 def _load_local_source(path_str: str, config_path: Path) -> list[str]:
-  """Read entries from a local file in altbrow list or hosts format.
+  """Read entries from a local file or glob pattern in altbrow list or hosts format.
 
   Supports both plain domain/IP lists and hosts file format
   (``0.0.0.0 domain`` / ``127.0.0.1 domain`` lines) via parse_entries().
   Absolute paths (e.g. /etc/hosts) are used as-is.
+  Glob patterns (e.g. ``./provider.d/*.txt``) expand to all matching files.
 
   Args:
-    path_str: File path as defined in provider source (absolute or relative
-      to altbrow.toml).
+    path_str: File path or glob pattern, absolute or relative to altbrow.toml.
     config_path: Path to altbrow.toml, used to resolve relative paths.
 
   Returns:
@@ -122,11 +121,17 @@ def _load_local_source(path_str: str, config_path: Path) -> list[str]:
   if not source_path.is_absolute():
     source_path = config_path.parent / source_path
 
-  if not source_path.exists():
+  matches = sorted(source_path.parent.glob(source_path.name))
+  if not matches:
     logger.warning("Local source not found: %s", source_path)
     return []
 
-  return parse_entries(source_path.read_text(encoding="utf-8", errors="replace"))
+  entries = []
+  for match in matches:
+    entries.extend(
+      parse_entries(match.read_text(encoding="utf-8", errors="replace"))
+    )
+  return entries
 
 
 def build_cache(
@@ -223,6 +228,8 @@ def build_cache(
       entries: list[str] = []
 
       if location == "local":
+        if "geoip" in mappings:
+          continue  # handled by extract_geodbs(), not inserted into DB
         for src in sources:
           entries.extend(_load_local_source(src, config_path))
 
