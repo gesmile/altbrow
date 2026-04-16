@@ -13,6 +13,33 @@ Rapid review and evaluation of a website based on publicly available information
 
 ### Install
 
+#### linux user
+
+```
+# preparation and install
+sudo apt install python3-pip
+sudo apt install python3.12-venv
+python3 -m venv .venv
+source .venv/bin/activate
+
+pip install https://github.com/gesmile/altbrow/releases/download/v0.1.1rc3/altbrow-0.1.1rc3-py3-none-any.whl
+
+# configuration and renew cache
+altbrow -v --validate-config
+vi ~/.altbrow/altbrow.toml
+vi ~/.altbrow/provider.toml
+
+altbrow --validate-config
+altbrow --build-cache
+
+# usage
+altbrow -vv <URL>
+altbrow --no-cert-check --client-profile browser <URL>
+altbrow -f json | jq -c '.signals.external_domains[] | {domain: .value, geo, occurrence }'
+```
+
+#### inside repository
+
 ```bash
 pip install -e .
 ```
@@ -23,41 +50,17 @@ pip install -e .
 
 usage: altbrow [-h] [-V] [--config CONFIG] [-o OUTPUT] [-f {text,yaml,json}] [-v] [--client-profile {passive,browser,consented}] [--no-cert-check] [--validate-config] [--build-cache] [--debug] [--log-file PATH]
                [url]
-
-positional arguments:
-  url                   URL to analyze
-
-options:
-  -h, --help            show this help message and exit
-  -V, --version         show program's version number and exit
-  --config CONFIG       Path to configuration file (TOML)
-  -o OUTPUT, --output OUTPUT
-                        Write result to file
-  -f {text,yaml,json}, --format {text,yaml,json}
-                        Output format (default: text)
-  -v, --verbose         Increase text detail level (-vv, -vvv)
-  --client-profile {passive,browser,consented}
-                        HTTP client behavior profile (default: from config)
-  --no-cert-check       Disable TLS certificate verification (self-signed certs, local hosts)
-  --validate-config     Validate altbrow.toml & provider.toml and exit
-  --build-cache         (Re)build provider cache DB, unpack geoIP mmdd files and exit
-  --debug               Enable debug logging (steps, DNS queries, cache hits)
-  --log-file PATH       Write log to file (default: altbrow.log next to altbrow.toml)
-  
-  ```
-
+```
 
 ### Config discovery
-
 
 1) --config /etc/altbrow.toml   →  /etc/provider.toml        (explicit)
 2) ~/.altbrow/altbrow.toml      →  ~/.altbrow/provider.toml  (user)
 3) ./altbrow.toml               →  ./provider.toml           (portable)
 
-If no config exists, defaults are generated in `~/.altbrow/` on first run.   
+If no config exists, defaults are generated in `~/.altbrow/` on first run.
 
 > Cache size: up to ~0.5 GB with full remote provider lists enabled.
-
 
 
 ## Exit Codes
@@ -102,15 +105,6 @@ Each enabled provider requires at least one enabled category.
 | `infrastructure`| Web standards, semantic namespaces, DNS resolvers    |
 | `unknown`       | default if no provider hit                           |
 
-#### Automatic classifications (no provider needed)
-
-| Value         | Description                                                        |
-|---------------|--------------------------------------------------------------------|
-| `FIRST_PARTY` | Same registrable domain as the analysed page                       |
-| `PEER`        | Lateral sibling (same registrable domain, different subdomain)     |
-| `SUBDOMAIN`   | Strict subdomain of the TARGET host                                |
-| `EXTERNAL`    | Different registrable domain                                       |
-
 ### Provider schema
 
 ```toml
@@ -139,7 +133,7 @@ source = ["C:\\Windows\\System32\\drivers\\etc\\hosts"]
 # location = "remote" — HTTP/HTTPS URL
 source = ["https://example.com/list.txt"]
 
-# location = "dns" — resolver IPs per category, sinkhole required
+# location = "dns" — resolver IPs per category, sinkhole (= fake answer) required
 source   = ["208.67.222.222", "208.67.220.220"]
 sinkhole = ["146.112.61.104", "::ffff:146.112.61.104"]
 
@@ -148,7 +142,7 @@ sinkhole = ["146.112.61.104", "::ffff:146.112.61.104"]
 #### GeoIP provider (MaxMind GeoLite2)
 
 GeoIP uses `location = "local"` or `location = "remote"` with `mapping = ["geoip"]`.
-Processed only during `--build-cache`. Requires free registration at MaxMind.
+Processed only during `--build-cache` for updates. Requires free registration at MaxMind.
 
 ```toml
 
@@ -160,7 +154,7 @@ enabled  = true
 [[provider.maxmind.category]]
 name    = "ASN"
 mapping = ["geoip"]
-source  = ["./GeoLite2-ASN_*.tar.gz"]   # glob, newest match is used
+source  = ["./GeoLite2-ASN_*.tar.gz"]   # glob, newest match is used for update
 
 ```
 
@@ -190,3 +184,7 @@ external domains classified by provider category and GeoIP — with one false po
 `rdflib.readthedocs.io` as `malware` is NOT true.
 
 ```
+
+### UTF8 enabled
+
+![UTF8 enabled](assets/altbrow-utf8.png)
