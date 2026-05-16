@@ -1,3 +1,8 @@
+<p align="center" >
+  <img src="assets/logo-sign.svg" width="90" alt="Altbrow Sign">
+  <img src="assets/logo.svg" width="90" alt="Altbrow Logo">
+</p>
+
 # Altbrow
 
 Alternative crawler-like browser for a deep look into a website's semantic structure and external dependencies.
