@@ -16,10 +16,10 @@ DATA_DIR = Path(__file__).parent / "data"
 
 
 def _get_domains(extracted: dict) -> dict[str, dict]:
-  """Return external_domains as {value: result_dict}."""
+  """Return domains as {value: result_dict}."""
   return {
     d["value"]: d
-    for d in extracted.get("signals", {}).get("external_domains", [])
+    for d in extracted.get("signals", {}).get("domains", [])
   }
 
 
@@ -117,9 +117,9 @@ def test_has_signals(extracted_fixture, request):
 @pytest.mark.parametrize("extracted_fixture", [
   "basic_localhost", "basic_127", "dns_localhost", "dns_127"
 ])
-def test_external_domains_present(extracted_fixture, request):
+def test_domains_present(extracted_fixture, request):
   extracted = request.getfixturevalue(extracted_fixture)
-  assert len(extracted["signals"]["external_domains"]) > 0
+  assert len(extracted["signals"]["domains"]) > 0
 
 
 # ---------------------------------------------------------------------------
@@ -196,8 +196,8 @@ def test_rfc1918_in_output(extracted_fixture, request):
   """RFC1918 IPs from test.html must appear in output."""
   extracted = request.getfixturevalue(extracted_fixture)
   signals = extracted["signals"]
-  ip_values     = [ip["value"] for ip in signals.get("external_ips", [])]
-  domain_values = [d["value"] for d in signals.get("external_domains", [])]
+  ip_values     = [ip["value"] for ip in signals.get("ips", [])]
+  domain_values = [d["value"] for d in signals.get("domains", [])]
   all_values = ip_values + domain_values
   assert any(v.startswith("10.") or v.startswith("192.168.") for v in all_values)
 
@@ -211,15 +211,15 @@ def test_target_relation_localhost(basic_localhost):
   domains = _get_domains(basic_localhost)
   target = domains.get("localhost")
   if target:
-    assert target["relation"] == "FIRST_PARTY"
+    assert target["rel"] == "FIRST_PARTY"
 
 
 def test_target_relation_127(basic_127):
-  """TARGET host is 127.0.0.1 — must appear in external_ips with TARGET occurrence."""
+  """TARGET host is 127.0.0.1 — must appear in ips with TARGET occurrence."""
   signals = basic_127["signals"]
-  ips = {ip["value"]: ip for ip in signals.get("external_ips", [])}
+  ips = {ip["value"]: ip for ip in signals.get("ips", [])}
   if "127.0.0.1" in ips:
-    assert ips["127.0.0.1"]["occurrence"] == "TARGET"
+    assert ips["127.0.0.1"]["occ"] == {"target": 1}
 
 # ---------------------------------------------------------------------------
 # JSON-LD
@@ -230,7 +230,7 @@ def test_target_relation_127(basic_127):
 ])
 def test_jsonld_detected(extracted_fixture, request):
   extracted = request.getfixturevalue(extracted_fixture)
-  jsonld = extracted.get("structured_data", {}).get("json-ld", [])
+  jsonld = extracted.get("data", {}).get("jsonld", [])
   assert len(jsonld) > 0
 
 
@@ -239,6 +239,6 @@ def test_jsonld_detected(extracted_fixture, request):
 ])
 def test_jsonld_type_webpage(extracted_fixture, request):
   extracted = request.getfixturevalue(extracted_fixture)
-  jsonld = extracted.get("structured_data", {}).get("json-ld", [])
+  jsonld = extracted.get("data", {}).get("jsonld", [])
   types = [b.get("@type") for b in jsonld]
   assert "WebPage" in types

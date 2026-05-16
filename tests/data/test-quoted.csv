@@ -1,0 +1,3 @@
+# test fixture: quoted comma-delimited CSV
+"quoted-domain.example.com","Quoted Title"
+"another-quoted.example.com","Another Title"

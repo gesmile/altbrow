@@ -1,8 +1,8 @@
 # provider.toml is only used when in ./altbrow.toml is set: `meta.use-provider = true`
 
 [meta]
-version = 2
-created = "2026-04-13"
+version = 3
+created = "2026-05-12"
 
 # Local (file) Provider 
 
@@ -15,6 +15,30 @@ enabled = false
 [[provider.fail2ban.category]]
 mapping = ["suspicious"]
 source = ["./fail2ban.txt"]
+# ---------------------------------------------------------------------------
+
+[provider.csv]
+
+location = "local"
+type = "domain"
+enabled = true
+
+[[provider.csv.category]]
+name    = "test"
+mapping = ["local"]
+source  = ["./provider.d/test-*.csv"]
+
+# ---------------------------------------------------------------------------
+
+[provider.oisd-small]
+location = "local"
+type     = "domain"
+enabled  = true
+
+[[provider.oisd-small.category]]
+name    = "OISD small blocklist"
+mapping = ["ads"]
+source  = ["./provider.d/small.oisd.nl.txt"]
 
 
 # ---------------------------------------------------------------------------
@@ -393,6 +417,64 @@ enabled  = true
 name    = "Local IP list"
 mapping = ["suspicious"]
 source  = ["./provider.d/ip_*.txt"]
+
+# ---------------------------------------------------------------------------
+
+[provider.windows]
+location = "local"
+type     = "domain"
+enabled  = true
+
+[[provider.windows.category]]
+name    = "hosts"
+mapping = ["local"]
+source  = ["./provider.d/windows-hosts.txt"]
+
+# ---------------------------------------------------------------------------
+
+[provider.bookmarks]
+location = "local"
+type     = "domain"
+enabled  = true
+
+[[provider.bookmarks.category]]
+name    = "My Bookmarks"
+enabled = true
+mapping = ["local"]
+source  = ["provider.d/*.html"]
+
+# ---------------------------------------------------------------------------
+
+[provider.bookmarks-ip]
+location = "local"
+type     = "ip"
+enabled  = true
+
+[[provider.bookmarks-ip.category]]
+name    = "My Bookmarks IPs"
+enabled = true
+mapping = ["local"]
+source  = ["provider.d/*.html"]
+
+# ---------------------------------------------------------------------------
+
+# Curlie — largest human-edited web directory: https://curlie.org/download
+# Download and extract the tar.gz. Use only rdf-*-c.tsv files (URL as first column).
+# Curlie categories are NOT useable. If domain is in Curlie's list, we suggest either "local" or "social".
+# Place in ~/.altbrow/provider.d/ and reference by category of your choice.
+
+[provider.curlie]
+location = "local"
+type     = "domain"
+enabled  = true
+
+[[provider.curlie.category]]
+name    = "curlie"
+tier    = 8
+enabled = true
+mapping = ["social"]
+source  = ["./provider.d/rdf-*-c.tsv"]
+
 
 # ---------------------------------------------------------------------------
 # Special provider — explicit tier 0, single non-glob file

@@ -3,8 +3,8 @@
 # mock-remote uses localhost:8080 served by conftest.py mock server
 
 [meta]
-version = 1
-created = "2026-04-15"
+version = 3
+created = "2026-05-12"
 
 [resolve]
 resolve-domains = false
@@ -147,6 +147,39 @@ mapping = ["suspicious"]
 source  = ["./provider.d/special.db"]
 
 # ---------------------------------------------------------------------------
+
+[provider.csv]
+
+location = "local"
+type = "domain"
+enabled = true
+
+[[provider.csv.category]]
+name    = "test"
+mapping = ["local"]
+source  = ["./provider.d/test-*.csv"]
+
+# ---------------------------------------------------------------------------
+
+# Curlie — largest human-edited web directory: https://curlie.org/download
+# Download and extract the tar.gz. Use only rdf-*-c.tsv files (URL as first column).
+# Curlie categories are NOT useable. If domain is in Curlie's list, we suggest either "local" or "social".
+# Place in ~/.altbrow/provider.d/ and reference by category of your choice.
+
+[provider.curlie]
+location = "local"
+type     = "domain"
+enabled  = true
+
+[[provider.curlie.category]]
+name    = "curlie"
+tier    = 8
+enabled = true
+mapping = ["social"]
+source  = ["./provider.d/rdf-*-c.tsv"]
+
+
+# ---------------------------------------------------------------------------
 # Remote mock provider (served by conftest.py mock server)
 # ---------------------------------------------------------------------------
 
@@ -175,13 +208,23 @@ source  = ["http://localhost:8080/fail2ban.txt"]
 # ---------------------------------------------------------------------------
 
 [provider.system-hosts]
-name     = "hosts file"
+name     = "linux"
 location = "local"
 type     = "domain"
 enabled  = true
 
 [[provider.system-hosts.category]]
-name    = "linux"
+name    = "hosts"
 tier    = 0
 mapping = ["local"]
 source  = ["/etc/hosts"]
+
+[provider.windows]
+location = "local"
+type     = "domain"
+enabled  = true
+
+[[provider.windows.category]]
+name    = "hosts"
+mapping = ["local"]
+source  = ["./provider.d/windows-hosts.txt"]

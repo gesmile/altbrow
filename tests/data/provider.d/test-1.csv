@@ -1,0 +1,21 @@
+#test csv
+google.com,1,2,3
+gtld-servers.net,1,2,3
+gstatic.com,1,2,3
+cloudflare.com,1,2,3
+facebook.com,,,
+microsoft.com,1,2,3
+googleapis.com,1,2,3
+youtube.com,1,2,3
+mail.ru,1,2,3
+"apple.com","1","2","sha256=cc8aa29c88e42263b9ba1b7c90ef041839aff7c513a840df02b2991a4ae30afa"
+amazonaws.com,1,2,3
+instagram.com,1,2,3
+akamai.net,1,2,3
+fbcdn.net,1,2,3
+dzen.ru,1,2,3
+twitter.com,1,2,3
+linkedin.com,1,2,3
+googletagmanager.com,1,2,3
+office.com,1,2,3
+googlevideo.com,1,2,3

@@ -1,0 +1,4 @@
+# test fixture: hosts file format
+0.0.0.0 hosts-domain.example.com
+127.0.0.1 another-hosts.example.com
+:: ipv6-hosts.example.com

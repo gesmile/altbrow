@@ -1,0 +1,113 @@
+[Adblock Plus]
+! Version: 202605150646
+! Title: oisd small
+! Description: Block. Don't break.
+! Syntax: Adblock Plus Filter List
+! Entries: 57587
+! Last modified: 2026-05-15T06:46:55+0000
+! Expires: 1 hours
+! License: https://github.com/sjhgvr/oisd/blob/main/LICENSE
+! Maintainer: Stephan van Ruth
+! Homepage: https://oisd.nl
+
+||0-02.net^
+||0.myikas.com^
+||0.www.3l521lt85429q1kn6-r770.xyz^
+||0.www.cheetahhowevertowardsfrom.com^
+||0.www.m657srtusw1sn3-7lol8-5.xyz^
+||0.www.metaboliteandmisspend.com^
+||0.www.som4okn1qku1r9p0ul.xyz^
+||0.www.swr96usn7k2ktls53sw.xyz^
+||0.www.weightabsenteekmonthly.com^
+||000491b06a.com^
+||000c34b44b.1c3139f0ca.com^
+||000webhostapp.com^
+||0014b04291.com^
+||0033ee9caa.14474f114f.com^
+||00427011ae.com^
+||00609c257b.com^
+||00c6c88efd.e5ad8b54ee.com^
+||00cae06d30.720df8c8c9.com^
+||00e2120672.com^
+||00ef400e98.3a1ebd5d26.com^
+||00k456wyh.com^
+||00p034d0dw.com^
+||01168nl.com^
+||011qt7cln.com^
+||013d86aa75.acd8bc90e4.com^
+||01466b626e.b173280abe.com^
+||015ea24446.com^
+||0171pjx5q.com^
+||01955ad1f7.com^
+||01a3500ed0.3bfff8a34d.com^
+||01anf08rf.com^
+||01ca03c5d7.9a131ab3ce.com^
+||01counter.com^
+||0213499675.com^
+||0214217ebc.com^
+||02228640b9.com^
+||0225083fd4.26664d7709.com^
+||023hysj.com^
+||024e3caef2.com^
+||029519cbdc.com^
+||02exl1ql2l.com^
+||039858f297.com^
+||03d756a534.com^
+||03h6fpes.xyz^
+||03in08p3r1.com^
+||03t441b8w.com^
+||0407137f3d.com^
+||0458a53a71.com^
+||046dbf6bb6.e344614b05.com^
+||04b9055b2a.com^
+||05086715f4.com^
+||054ii.com^
+||055479b29b.9a57160d5c.com^
+||05867500b2.7a28c1843f.com^
+||058d79990c.com^
+||0592.mobi^
+||05b9daf35c.com^
+||05e4bd1819.com^
+||05e76a16b8.5e3d5f480f.com^
+||05f3b6b187.com^
+||062d9d4d72.26fc4b0b38.com^
+||0645405ef4.com^
+||066b0fa5eb.64980aaffd.com^
+||066b7e895c.com^
+||067f87da09.com^
+||06aa7d6d80.com^
+||06b36b4508.5813e74b18.com^
+||06cp8ypn8j.com^
+||06evyxnibl.com^
+||06f864e06a.com^
+||06hkgn0jl3.com^
+||070880.com^
+||07b5ec4fa6.com^
+||07pv7k61z.com^
+||08082c0ad5.com^
+||0832fddfc8.com^
+||08675bd78b.com^
+||0880559526.com^
+||08e4efb6b8.com^
+||091kdjn7.xyz^
+||09241190c8.com^
+||0924201a0b.com^
+||0941.org^
+||094kk.com^
+||096243309f.com^
+||0980b6e8fe.com^
+||09qin0pc.xyz^
+||0a0atz2sh.top^
+||0a186254d0.cf25ba90cc.com^
+||0a66kw9r8.com^
+||0af2a962b0102942d9a7df351b20be55.com^
+||0aior18v.xyz^
+||0b4qu3nxa.com^
+||0b6rvr210q.com^
+||0b74655a28.com^
+||0ba2b70e8c.com^
+||0bb8jytek.com^
+||0bd18cc899.com^
+||0c2bddd1f6.com^
+||0c43ec936e.d1e223a9f2.com^
+||0c6bdc3ecc.cfabf1ef11.com^
