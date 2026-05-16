@@ -19,29 +19,30 @@ except ImportError:
   yaml = None
 
 
-def _format_categories(cats: list[dict], providers: dict | None = None) -> tuple[str, str]:
-  """Split categories into winning (lowest tier) and full sorted list.
+def _format_categories(cats: list[dict], providers: dict | None = None) -> str:
+  """Format pre-sorted categories as a verbose provider list string.
 
   Categories must be pre-sorted by tier ascending (classify_domain does this).
+  The winning category is read from the result dict's `cat` field — not derived here.
   providers is config["provider"] — used to resolve human-readable provider names.
-  category_name is already stored in DB and used directly.
 
   Returns:
-    Tuple (winning, all_str):
-      winning - lowest-tier category name, or 'unknown' if no match
-      all_str - all as 'category(provider/category_name)', or '-' if no match
+    All categories as 'category(provider/name)' joined by ', ', or '-'.
   """
   if not cats:
-    return "unknown", "-"
-  winning = cats[0]["category"]
+    return "-"
   providers = providers or {}
   def _fmt(c: dict) -> str:
     p_label = providers.get(c["provider"], {}).get("name") or c["provider"]
-    cat_label = c.get("category_name")
+    cat_label = c.get("name")
     label = f"{p_label}/{cat_label}" if cat_label else p_label
     return c["category"] + "(" + label + ")"
-  all_str = ", ".join(_fmt(c) for c in cats)
-  return winning, all_str
+  return ", ".join(_fmt(c) for c in cats)
+
+
+def _occ_str(occ: dict) -> str:
+  """Format an occ count dict as an uppercase slash-joined string for text display."""
+  return "/".join(k.upper() for k in occ) if occ else ""
 
 
 def _render_text(extracted: dict, verbosity: int, providers: dict | None = None) -> None:
@@ -54,41 +55,38 @@ def _render_text(extracted: dict, verbosity: int, providers: dict | None = None)
     geo_readers: Open GeoReaders for live GeoIP lookup, or None.
   """
   signals    = extracted.get("signals", {})
-  structured = extracted.get("structured_data", {})
+  structured = extracted.get("data", {})
 
-  domains   = signals.get("external_domains", [])
-  ips       = signals.get("external_ips", [])
+  domains   = signals.get("domains", [])
+  ips       = signals.get("ips", [])
   cookies   = signals.get("cookies", [])
-  jsonld    = structured.get("json-ld", [])
-  microdata = structured.get("microdata", [])
+  jsonld    = structured.get("jsonld", [])
+  microdata = structured.get("micro", [])
 
-  # count by winning category (lowest tier) per domain
+  # count by winning category per domain (pre-computed cat field)
   cat_counts: dict[str, int] = {}
   for d in domains:
-    cats = d.get("categories", [])
-    winning = cats[0]["category"] if cats else "unknown"
+    winning = d.get("cat", "unknown")
     cat_counts[winning] = cat_counts.get(winning, 0) + 1
 
   cat_summary = ", ".join(
     f"{k}: {v}" for k, v in sorted(cat_counts.items())
   )
 
-  # count by country code from geo field
+  # count by country code from structured ip.geo
   geo_counts: dict[str, int] = {}
   for d in domains:
-    geo = d.get("geo", "")
-    cc = geo.split("/")[0].split(" ")[0] if geo else None
-    if cc and len(cc) == 2 and cc.isalpha():
+    cc = d.get("ip", {}).get("geo", {}).get("country")
+    if cc:
       geo_counts[cc] = geo_counts.get(cc, 0) + 1
   geo_summary = ", ".join(
     f"{k}: {v}" for k, v in sorted(geo_counts.items(), key=lambda x: -x[1])
   )
 
-  # count by winning category (lowest tier) per IP
+  # count by winning category per IP
   ip_cat_counts: dict[str, int] = {}
   for ip in ips:
-    cats = ip.get("categories", [])
-    winning = cats[0]["category"] if cats else "unknown"
+    winning = ip.get("cat", "unknown")
     ip_cat_counts[winning] = ip_cat_counts.get(winning, 0) + 1
 
   ip_cat_summary = ", ".join(
@@ -107,18 +105,20 @@ def _render_text(extracted: dict, verbosity: int, providers: dict | None = None)
     return
 
   print("\n=== External Domains ===")
+  from .geoip import format_geo as _fmt_geo
   for d in domains:
-    winning, all_str = _format_categories(d.get("categories", []), providers)
-    geo = d.get("geo", "")
-    geo_col = f"[{geo}]" if geo else "-"
+    winning = d.get("cat", "unknown")
+    geo_str = _fmt_geo(d.get("ip", {}).get("geo", {}))
+    geo_col = f"[{geo_str}]" if geo_str else "-"
     if verbosity >= 2:
+      all_str = _format_categories(d.get("categories", []), providers)
       print(
-        f"  {d['relation']:<12} {d.get('occurrence',''):<10} "
+        f"  {d['rel']:<12} {_occ_str(d.get('occ', {})):<10} "
         f"{d['value']:<40} {winning:<15} {geo_col:<20} {all_str}"
       )
     else:
       print(
-        f"  {d['relation']:<12} {d.get('occurrence',''):<10} "
+        f"  {d['rel']:<12} {_occ_str(d.get('occ', {})):<10} "
         f"{d['value']:<40} {winning:<15} {geo_col}"
       )
 
@@ -127,18 +127,19 @@ def _render_text(extracted: dict, verbosity: int, providers: dict | None = None)
     print("  (none)")
   else:
     for ip in ips:
-      winning, all_str = _format_categories(ip.get("categories", []), providers)
-      occurrence = ip.get("occurrence", "")
-      geo = ip.get("geo", "")
-      geo_col = f"[{geo}]" if geo else "-"
+      winning = ip.get("cat", "unknown")
+      occ_col = _occ_str(ip.get("occ", {}))
+      geo_str = _fmt_geo(ip.get("geo", {}))
+      geo_col = f"[{geo_str}]" if geo_str else "-"
       if verbosity >= 2:
+        all_str = _format_categories(ip.get("categories", []), providers)
         print(
-          f"  {ip['relation']:<12} {occurrence:<10} "
+          f"  {ip['rel']:<12} {occ_col:<10} "
           f"{ip['value']:<40} {winning:<15} {geo_col:<20} {all_str}"
         )
       else:
         print(
-          f"  {ip['relation']:<12} {occurrence:<10} "
+          f"  {ip['rel']:<12} {occ_col:<10} "
           f"{ip['value']:<40} {winning:<15} {geo_col}"
         )
 

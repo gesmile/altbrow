@@ -1,5 +1,6 @@
 from pathlib import Path
 from altbrow import __version__
+from altbrow.utils import format_size
 from datetime import date
 import tomllib
 
@@ -14,38 +15,49 @@ import tomllib
 VALID_PROFILES = {"passive", "browser", "consented"}
 ALLOWED_LOCATIONS = {"local", "inline", "remote", "dns"}
 ALLOWED_TYPES = {"ip", "domain"}
+ALLOWED_PROTOCOLS = {"https://", "http://"}
 ALLOWED_LOCAL_HOSTNAMES = { "localhost", "localhost.localdomain", "local", "ip6-localhost", "ip6-loopback", "broadcasthost", }
 ALLOWED_MAPPINGS = {
-    "ads",
-    "analytics",
-    "cdn",
-    "malware",
-    "social",
-    "suspicious",
-    "telemetry",
-    "tracking",
-    "local",
-    "infrastructure",
-    "unknown",
-    "geoip",
+  "ads",
+  "analytics",
+  "cdn",
+  "malware",
+  "social",
+  "suspicious",
+  "telemetry",
+  "tracking",
+  "local",
+  "infrastructure",
+  "unknown",
+  "geoip",
 }
 
 # Default tier per provider location — lower tier wins (first match in DB on tie)
 # Configuration for provider.name.category overwrites.
 # If no tier is configured at category level, this browser location mapping is used
 LOCATION_DEFAULT_TIER = {
-    "inline": 1,
-    "local":  1,
-    "dns":    2,
-    "remote": 2,
+  "inline": 1,
+  "local":  1,
+  "dns":    2,
+  "remote": 2,
 }
 
 # Default [resolve] section values for provider.toml
 RESOLVE_DEFAULTS: dict = {
-    "resolve-domains":  False,
-    "resolver":         ["os"],
-    "resolver-timeout": 2,
+  "resolve-domains":  False,
+  "resolver":         ["os"],
+  "resolver-timeout": 2,
 }
+
+# special download and extract strings
+_MAJESTIC_DOWNLOAD = (
+  r"# Download: curl -s https://downloads.majestic.com/majestic_million.csv"
+  r" | awk -F ',' 'NR>1{print $3}'"
+  r" > ~/.altbrow/majestic_million.txt"
+)
+_OISD_DOWNLOAD = (
+  r"# Download list and convert to altbrow format, e.g. `curl -s https://big.oisd.nl/ | sed -n 's/^||\([a-zA-Z0-9._-]*\)[\.^].*/\1/p' >"
+)
 
 class ConfigError(Exception):
   pass
@@ -167,22 +179,23 @@ def get_client_profile(config: dict, override: str | None) -> dict:
 
 def default_config_altbrow() -> str:
   return f"""
-# default ./altbrow.toml config file
+# default config file: altbrow.toml
 
-# you may use privat permanent config by moving to:
-# ~/.altbrow/altbrow.toml and ~/.altbrow/provider.toml
-# if path exsits a Provider cache file will be created there, too
+# good location: ~/.altbrow/altbrow.toml
+# same for provider.toml and cache file location
 
 [meta]
 version = 1
 created = "{date.today()}"
 use-provider = false
 
-[validation.schema_org]
-allow_unknown_properties = false
-
 [validation]
-microdata_vs_jsonld.tolerance = "loose"
+
+# for future use: strict schema.org property validation
+# schema_org.allow_unknown_properties = false
+
+# for future use: tolerance when same content appears in both microdata and JSON-LD
+# microdata_vs_jsonld.tolerance = "loose"   # loose | strict
 
 [output]
 explicit_format = "json"
@@ -229,42 +242,45 @@ fetch_subresources = 1
 
 def default_config_provider() -> str:
   return f"""
-# provider.toml is only used when in "altbrow.toml" is set: `meta.use-provider = true`
+# Provider system config: provider.toml
+#
+# Activate the provider system by setting `meta.use-provider = true` in altbrow.toml.
+# The cache file (.altbrow.cache) is built next to altbrow.toml on first run or via --build-cache.
 
-# 1st, given, cli:         --config /etc/altbrow.toml  ->  /etc/provider.toml
-# 2nd, if exits, user:     ~/.altbrow/altbrow.toml     ->  ~/.altbrow/provider.toml
-# 3rd, default, portable:  ./altbrow.toml              ->  ./provider.toml
+# ---------------------------------------------------------------------------
+# Schema
+# ---------------------------------------------------------------------------
 
 # --- 8< ---
 # [provider.name]
-# name     = "human readable label"            # optional
-# location = "[local|inline|remote|dns]"
-# type     = "[ip|domain|geoip]"
-# enabled  = [true|false]
-# subdomain_match = [true|false]
-#
-# # Every enabled provider needs at least one enabled category:
-#
+# name            = "human readable label"            # optional
+# location        = "[inline|local|remote|dns]"
+# type            = "[ip|domain|geoip]"
+# enabled         = [true|false]                      # optional, default: true
+# subdomain_match = [true|false]                      # optional, default: true
+#   true:  cdn.example.com matches if example.com is in the list (registrable domain)
+#   false: only exact hostname matches — recommended for large lists (Curlie, Tranco)
+
 # [[provider.name.category]]
 # name     = "human readable label"           # optional
-# enabled  = [true|false]
-# tier     = <int>                            # optional, default: inline/local=1, dns/remote=2 (0 reserved)
+# enabled  = [true|false]                     # optional, default: true
+# tier     = <int>                            # optional, default: inline/local=1, dns/remote=2; 0 = highest priority
 # mapping  = ["<category>"]                   # one or more from list below
 # sinkhole = ["<ip>", ...]                    # dns only: block page IPs for this category
-#
-# source  = ["./file.txt"]                    # local: file path(s) relative to provider.toml
-# source  = ["example.com"]                   # inline domain: domain list
-# source  = ["192.168.1.0/24"]                # inline ip: ip or cidr list
+# source   = ["./file.txt"]                   # local: file path(s) relative to altbrow.toml
 # source  = ["example.com", "iana.org"]       # inline domain: domain list
-# source  = ["1.1.1.0/24", "8.8.8.8"]         # inline ip: ip or cidr list
-# source  = ["https://example.com/list.txt"]  # remote: URL(s)
-# source  = ["<resolver-ip>", ...]            # dns: resolver IP(s) per category — allows multiple resolver categories
+# source   = ["1.1.1.0/24", "8.8.8.8"]        # inline ip: ip or cidr list
+# source   = ["https://example.com/list.txt"] # remote: URL(s)
+# source   = ["<resolver-ip>", ...]           # dns: resolver IP(s) per category
 # --- 8< ---
 
-# altbrow internal 8 categories:
-#
+# ---------------------------------------------------------------------------
+# Categories
+# ---------------------------------------------------------------------------
+
+# 8 standard categories:
 #   ads           - advertising networks and ad delivery
-#   analytics     - user behaviour measurement and reporting
+#   analytics     - user behavior measurement and reporting
 #   cdn           - content delivery networks and static asset hosting
 #   malware       - malware, phishing, known hostile domains
 #   social        - social networks, dating, gambling, adult content
@@ -272,45 +288,42 @@ def default_config_provider() -> str:
 #   telemetry     - error reporting, performance monitoring, device telemetry
 #   tracking      - cross-site user tracking and profiling
 
-# altbrow special 4 categories:
-#
-#   local          - RFC1918, localhost, loopback, your domains
-#   infrastructure - technical and semantic web standards, DNS resolvers
-#   unknown        - no category match
+# 4 special categories:
+#   local          - RFC1918, localhost, loopback, your own domains
+#   infrastructure - web standards, DNS resolvers, technical endpoints
+#   unknown        - no category match (automatic)
 #   geoip          - used for location service, not a regular category
 
 # automatic categories (derived from structure, no provider needed):
-#
-#   FIRST_PARTY   - same registrable domain (example.com) as the analysed page (e.g. www.example.com)
-#   PEER          - siblings like images.example.com
-#   SUBDOMAIN     - subdomain of the analysed page domain, e.g. us.www.example.com
-#   SELF_REF      - domain appears only in JSON-LD @id / Microdata, not in HTML traffic
-#   EXTERNAL      - external domain
+#   FIRST_PARTY   - same registrable domain as the analysed page
+#   PEER          - sibling subdomain of the analysed page
+#   SUBDOMAIN     - subdomain of the analysed page
+#   SELF_REF      - appears only in JSON-LD @id / Microdata, not in HTML traffic
+#   EXTERNAL      - all other external domains
 
 # ---------------------------------------------------------------------------
 # Resolve Configuration
-# Controls domain-to-IP resolution and DNS resolver settings.
-# If this section is absent, RESOLVE_DEFAULTS apply.
 # ---------------------------------------------------------------------------
 
 [resolve]
 resolve-domains  = false       # resolve domains to IP and check against IP provider lists
-resolver         = ["os"]      # DNS resolver: "os" = system, or IP e.g. ["1.1.1.1","8.8.8.8"]
+resolver         = ["os"]      # "os" = system resolver, or explicit IPs: ["1.1.1.1", "8.8.8.8"]
 resolver-timeout = 2           # seconds per DNS query
 
 # ---------------------------------------------------------------------------
 # DNS Resolve Filter
 # Controls which provider categories trigger a live DNS query.
-# With empty section: all enabled dns provider categories are queried.
-# filter-mode = "or"  -> category match OR tier <= max-tier
-# filter-mode = "and" -> category match AND tier <= max-tier
+# Empty section: all enabled DNS provider categories are queried.
+#
+# filter-mode = "or"  → category match OR  tier <= max-tier
+# filter-mode = "and" → category match AND tier <= max-tier
 # Disable all DNS queries: set enabled-categories = [] with filter-mode = "and"
-#                          or simply disable all DNS providers in provider.toml
+#                          or simply disable all DNS providers below.
 # ---------------------------------------------------------------------------
 
 [dns-resolve-filter]
 enabled-categories = ["malware", "suspicious"]
-max-tier = 1
+max-tier    = 1
 filter-mode = "and"
 
 [meta]
@@ -318,32 +331,115 @@ version = 1
 created = "{date.today()}"
 
 # ---------------------------------------------------------------------------
-# Local Provider
+# Inline Domain Provider — examples
 # ---------------------------------------------------------------------------
 
-[provider.fail2ban]
-location = "local"
-type     = "ip"
-enabled  = false
-
-[[provider.fail2ban.category]]
-name    = "fail2ban SSH bans"
-mapping = ["suspicious"]
-source  = ["./fail2ban.txt"]
-
-# ---------------------------------------------------------------------------
-# Inline Domain Providers
-# ---------------------------------------------------------------------------
-
-[provider.infrastructure]
+[provider.example]
 location = "inline"
 type     = "domain"
 enabled  = true
 
-[[provider.infrastructure.category]]
+[[provider.example.category]]
+name    = "Software Updates"
+mapping = ["cdn"]
+source  = [
+  "windowsupdate.com",       # Microsoft
+  "swcdn.apple.com",         # macOS
+  "deb.debian.org",          # Debian
+]
+
+[[provider.example.category]]
+name    = "Known Analytics"
+mapping = ["analytics"]
+source  = [
+  "google-analytics.com",
+  "matomo.org",
+  "plausible.io",
+]
+
+# ---------------------------------------------------------------------------
+# Inline IP Provider
+# ---------------------------------------------------------------------------
+
+[provider.definedip]
+location = "inline"
+type     = "ip"
+enabled  = true
+
+[[provider.definedip.category]]
+name    = "RFC1918 Private"
+mapping = ["local"]
+source  = [
+  "10.0.0.0/8",
+  "172.16.0.0/12",
+  "192.168.0.0/16",
+]
+
+[[provider.definedip.category]]
+name    = "Loopback"
+mapping = ["local"]
+source  = [
+  "127.0.0.0/8",
+  "::1/128",
+]
+
+[[provider.definedip.category]]
+name    = "Link-Local"
+tier    = 99
+mapping = ["infrastructure"]
+source  = [
+  "169.254.0.0/16",
+  "fe80::/10",
+]
+
+[[provider.definedip.category]]
+name    = "Multicast"
+tier    = 99
+mapping = ["infrastructure"]
+source  = [
+  "224.0.0.0/4",
+  "ff00::/8",
+]
+
+[[provider.definedip.category]]
+name    = "Broadcast"
+tier    = 99
+mapping = ["infrastructure"]
+source  = [
+  "255.255.255.255/32",
+]
+
+[[provider.definedip.category]]
+name    = "Carrier-Grade NAT"
+tier    = 99
+mapping = ["infrastructure"]
+source  = [
+  "100.64.0.0/10",
+]
+
+[[provider.definedip.category]]
+name    = "Public DNS Resolvers"
+tier    = 99
+mapping = ["infrastructure"]
+source  = [
+  "1.1.1.1",          # Cloudflare
+  "8.8.8.8",          # Google
+  "9.9.9.9",          # Quad9
+  "208.67.222.222",   # OpenDNS
+]
+
+# ---------------------------------------------------------------------------
+# Inline Domain Provider — web standards
+# ---------------------------------------------------------------------------
+
+[provider.webstandard]
+location = "inline"
+type     = "domain"
+enabled  = true
+
+[[provider.webstandard.category]]
 name    = "Semantic Web Standards"
-enabled = true
-tier    = 0
+tier    = 99
 mapping = ["infrastructure"]
 source  = [
   "schema.org",
@@ -358,10 +454,9 @@ source  = [
   "json-ld.org",
 ]
 
-[[provider.infrastructure.category]]
+[[provider.webstandard.category]]
 name    = "Web Standards Bodies"
-enabled = true
-tier    = 0
+tier    = 99
 mapping = ["infrastructure"]
 source  = [
   "iana.org",
@@ -369,213 +464,167 @@ source  = [
   "whatwg.org",
 ]
 
-[provider.cdn]
+# ---------------------------------------------------------------------------
+# Inline Domain Provider — loopback hostnames (tier 99)
+# ---------------------------------------------------------------------------
+
+[provider.loopback]
 location = "inline"
 type     = "domain"
 enabled  = true
 
-[[provider.cdn.category]]
-name    = "Example Major CDN"
-enabled = true
-mapping = ["cdn"]
+[[provider.loopback.category]]
+name    = "Loopback hostnames"
+tier    = 99
+mapping = ["local"]
 source  = [
-  "cdnjs.cloudflare.com",
-  "cdn.cloudflare.com",
-  "akamai.net",
-  "akamaiedge.net",
-  "akamaized.net",
-  "edgesuite.net",
-  "fastly.net",
-  "fastlylb.net",
-  "cloudfront.net",
-  "amazonaws.com",
-  "gstatic.com",
-  "azureedge.net",
-  "msecnd.net",
-  "jsdelivr.net",
-  "unpkg.com",
-  "bootstrapcdn.com",
-  "stackpathcdn.com",
-  "b-cdn.net",
-  "kxcdn.com",
-]
-
-[provider.analytics]
-location = "inline"
-type     = "domain"
-enabled  = true
-
-[[provider.analytics.category]]
-name    = "Example Web Analytics"
-enabled = true
-mapping = ["analytics"]
-source  = [
-  "google-analytics.com",
-  "googletagmanager.com",
-  "googleadservices.com",
-  "cloudflareinsights.com",
-  "matomo.org",
-  "plausible.io",
-  "fathom.com",
-  "segment.com",
-  "mixpanel.com",
-  "amplitude.com",
-  "hotjar.com",
-  "clarity.ms",
-  "fullstory.com",
-  "logrocket.com",
-]
-
-[[provider.analytics.category]]
-name    = "Example Error and Performance Monitoring"
-enabled = true
-mapping = ["telemetry"]
-source  = [
-  "sentry.io",
-  "bugsnag.com",
-  "rollbar.com",
-  "newrelic.com",
-  "datadoghq.com",
-  "elastic.co",
-  "dynatrace.com",
-  "appdynamics.com",
-]
-
-[provider.tracking]
-location = "inline"
-type     = "domain"
-enabled  = true
-
-[[provider.tracking.category]]
-name    = "Example Social Tracking Pixels"
-enabled = true
-mapping = ["tracking"]
-source  = [
-  "facebook.net",
-  "connect.facebook.net",
-  "analytics.twitter.com",
-  "t.co",
-  "snapchat.com",
-  "sc-static.net",
-  "ads.pinterest.com",
-  "licdn.com",
-]
-
-[[provider.tracking.category]]
-name    = "Example Ad Network Tracking"
-enabled = true
-mapping = ["tracking"]
-source  = [
-  "bat.bing.com",
-  "taboola.com",
-  "outbrain.com",
-  "criteo.com",
-  "adroll.com",
-  "quantserve.com",
-  "scorecardresearch.com",
-  "bluekai.com",
-  "zemanta.com",
-  "doubleclick.net",
-]
-
-
-[provider.ads]
-location = "inline"
-type     = "domain"
-enabled  = true
-
-[[provider.ads.category]]
-name    = "Example Ad Delivery"
-enabled = true
-mapping = ["ads"]
-source  = [
-  "googlesyndication.com",
-  "googleadservices.com",
-  "doubleclick.net",
-  "amazon-adsystem.com",
-  "media.net",
-  "moatads.com",
-  "adsrvr.org",
-  "advertising.com",
-  "adnxs.com",
-  "rubiconproject.com",
-  "pubmatic.com",
-  "openx.net",
-  "smartadserver.com",
+  "localhost",
+  "localhost.localdomain",
+  "ip6-localhost",
+  "ip6-loopback",
 ]
 
 # ---------------------------------------------------------------------------
-# Inline IP Provider
+# Local Provider — filesystem lists
 # ---------------------------------------------------------------------------
 
-[provider.inlineip]
-location = "inline"
+[provider.fail2ban]
+name     = "Example IP list"
+location = "local"
 type     = "ip"
-enabled  = true
+enabled  = false
 
-[[provider.inlineip.category]]
-name    = "RFC1918 Private"
-enabled = true
-tier    = 0
-mapping = ["local"]
-source  = [
-  "10.0.0.0/8",
-  "172.16.0.0/12",
-  "192.168.0.0/16",
-]
-
-[[provider.inlineip.category]]
-name    = "Loopback"
-enabled = true
-tier    = 0
-mapping = ["local"]
-source  = [
-  "127.0.0.0/8",
-  "::1/128",
-]
-
-[[provider.inlineip.category]]
-name    = "Link-Local and Multicast"
-enabled = true
-tier    = 0
-mapping = ["infrastructure"]
-source  = [
-  "169.254.0.0/16",
-  "224.0.0.0/4",
-  "255.255.255.255/32",
-  "fe80::/10",
-  "ff00::/8",
-]
-
-[[provider.inlineip.category]]
-name    = "Carrier-Grade NAT"
-enabled = true
-tier    = 0
-mapping = ["infrastructure"]
-source  = [
-  "100.64.0.0/10",
-]
-
-[[provider.inlineip.category]]
-name    = "Example suspicious IPs"
-enabled = true
+[[provider.fail2ban.category]]
 mapping = ["suspicious"]
-source  = [
-  "2.57.122.210",
-  "46.101.74.113",
-  "81.192.46.45",
-  "92.118.39.56",
-  "92.118.39.72",
-  "92.118.39.76",
-  "102.88.137.80",
-  "118.193.36.205",
-  "162.223.91.130",
-  "193.32.162.151",
-  "197.5.145.102",
-]
+source  = ["./fail2ban.txt"]
+
+# --------------------
+# System hosts file — enable one category for your OS.
+
+[provider.system-hosts]
+name     = "hosts"
+location = "local"
+type     = "domain"
+enabled  = false
+
+[[provider.system-hosts.category]]
+name    = "unix"
+tier    = 99
+mapping = ["local"]
+source  = ["/etc/hosts"]
+
+[[provider.system-hosts.category]]
+name    = "windows"
+tier    = 99
+enabled = false
+mapping = ["local"]
+source  = ["C:\\\\Windows\\\\System32\\\\drivers\\\\etc\\\\hosts"]
+
+# --------------------
+
+# Curlie — largest human-edited web directory: https://curlie.org/download
+# Download and extract the tar.gz, use rdf-*-c.tsv files (URL as first column).
+
+[provider.curlie]
+location = "local"
+type     = "domain"
+enabled  = false
+subdomain_match = false
+
+[[provider.curlie.category]]
+name    = "all"
+tier    = 8
+mapping = ["social"]
+source  = ["./provider.d/rdf-*-c.tsv"]
+
+# --------------------
+
+# Tranco Top 1M — https://tranco-list.eu/latest_list
+# find actual download link: `curl -s https://tranco-list.eu/api/lists/date/latest | python -m json.tool`
+# Strip rank column first: sed 's/^[0-9]*,//' top-1m.csv > top-1m.txt
+
+[provider.tranco]
+name     = "Tranco"
+location = "local"
+type     = "domain"
+enabled  = false
+subdomain_match = false
+
+[[provider.tranco.category]]
+name    = "Top 1M"
+tier    = 9
+mapping = ["social"]
+source  = ["./provider.d/top-1m.txt"]
 
 # ---------------------------------------------------------------------------
-# Remote Provider
+
+# Blocklist OISD (https://oisd.nl/) — ABP Filter Format not yet supported
+{_OISD_DOWNLOAD}
+
+[provider.oisd]
+location = "local"
+type     = "domain"
+enabled  = false
+
+[[provider.oisd.category]]
+name    = "big"
+tier    = 3
+mapping = ["ads"]
+source  = ["./big.oisd.nl.txt"]
+
+# ---------------------------------------------------------------------------
+
+# HaGeZi's Pro DNS Blocklists (https://github.com/hagezi/dns-blocklists)
+
+[provider.hagezi]
+location = "remote"
+type     = "domain"
+enabled  = false
+
+[[provider.hagezi.category]]
+name    = "pro"
+mapping = ["tracking"]
+tier    = 3
+source  = ["https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains/pro.txt"]
+
+# ---------------------------------------------------------------------------
+
+# Majestic Million
+{_MAJESTIC_DOWNLOAD}
+# Powershell: 
+#   Invoke-WebRequest -Uri "https://downloads.majestic.com/majestic_million.csv" -OutFile "$env:TEMP\\majestic.csv"
+#   Import-Csv "$env:TEMP\\majestic.csv" | Select-Object -ExpandProperty Domain | Set-Content "$env:USERPROFILE\\.altbrow\\majestic_million.csv"
+
+[provider.majestic]
+location = "local"
+type     = "domain"
+enabled  = false
+
+[[provider.majestic.category]]
+name    = "1M"
+mapping = ["social"]
+tier    = 9
+source  = ["./majestic_million.csv"]
+
+# ---------------------------------------------------------------------------
+
+# OpenPhish - Relevant Phishing Intelligence.
+# free limited use under following Terms of Use: https://openphish.com/terms.html
+
+[provider.openphish]
+location = "remote"
+type     = "domain"
+enabled  = false
+
+[[provider.openphish.category]]
+name    = "Limited"
+mapping = ["malware"]
+source  = ["https://raw.githubusercontent.com/openphish/public_feed/refs/heads/main/feed.txt"]
+
+
+
+# ---------------------------------------------------------------------------
+# Remote Provider — downloaded on --build-cache
 # ---------------------------------------------------------------------------
 
 [provider.ipfire]
@@ -585,77 +634,31 @@ type     = "domain"
 enabled  = false
 
 [[provider.ipfire.category]]
-name    = "Advertising"
-enabled = false
-tier    = 3
-mapping = ["ads"]
-source  = ["https://dbl.ipfire.org/lists/ads/domains.txt"]
-
-[[provider.ipfire.category]]
-name    = "Dating"
-enabled = false
-mapping = ["social"]
-source  = ["https://dbl.ipfire.org/lists/dating/domains.txt"]
-
-[[provider.ipfire.category]]
-name    = "DNS-over-HTTPS"
-enabled = false
-mapping = ["telemetry"]
-source  = ["https://dbl.ipfire.org/lists/doh/domains.txt"]
-
-[[provider.ipfire.category]]
-name    = "Gambling"
-enabled = false
-mapping = ["social"]
-source  = ["https://dbl.ipfire.org/lists/gambling/domains.txt"]
-
-[[provider.ipfire.category]]
 name    = "Malware"
 tier    = 1
-enabled = false
 mapping = ["malware"]
 source  = ["https://dbl.ipfire.org/lists/malware/domains.txt"]
 
 [[provider.ipfire.category]]
 name    = "Phishing"
 tier    = 1
-enabled = false
 mapping = ["malware"]
 source  = ["https://dbl.ipfire.org/lists/phishing/domains.txt"]
 
 [[provider.ipfire.category]]
-name    = "Piracy"
+name    = "Advertising"
 enabled = false
-mapping = ["suspicious"]
-source  = ["https://dbl.ipfire.org/lists/piracy/domains.txt"]
+tier    = 9
+mapping = ["ads"]
+source  = ["https://dbl.ipfire.org/lists/ads/domains.txt"]
 
-[[provider.ipfire.category]]
-name    = "Pornography"
-enabled = false
-mapping = ["social"]
-source  = ["https://dbl.ipfire.org/lists/porn/domains.txt"]
-
-[[provider.ipfire.category]]
-name    = "Smart TV Telemetry"
-enabled = false
-mapping = ["telemetry"]
-source  = ["https://dbl.ipfire.org/lists/smart-tv/domains.txt"]
-
-[[provider.ipfire.category]]
-name    = "Social Networks"
-enabled = false
-mapping = ["social"]
-source  = ["https://dbl.ipfire.org/lists/social/domains.txt"]
-
-[[provider.ipfire.category]]
-name    = "Violence"
-enabled = false
-mapping = ["social"]
-source  = ["https://dbl.ipfire.org/lists/violence/domains.txt"]
+# further categories: dating, dns-over-https, gambling, piracy, porn, smart-tv, social, violence
+# see https://dbl.ipfire.org/lists/ for URLs
 
 # --------------------
 
-# same list is used by pi hole
+# StevenBlack hosts — used by Pi-hole and many other blockers.
+# Set sinkhole to your Pi-hole IP if using dns provider below.
 
 [provider.stevenblack]
 location = "remote"
@@ -663,17 +666,15 @@ type     = "domain"
 enabled  = false
 
 [[provider.stevenblack.category]]
-name    = "PIHole"
+name    = "Ads and Malware"
 mapping = ["ads"]
 source  = ["https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"]
-
 
 # ---------------------------------------------------------------------------
 # GeoIP Provider (MaxMind GeoLite2)
 # Download: https://dev.maxmind.com/geoip/geolite2-free-geolocation-data
 # ---------------------------------------------------------------------------
 
-# Local example — files next to altbrow.toml, glob resolves newest version:
 [provider.maxmind]
 location = "local"
 type     = "ip"
@@ -681,42 +682,31 @@ enabled  = false
 
 [[provider.maxmind.category]]
 name    = "Country"
-enabled  = true
 mapping = ["geoip"]
 source  = ["./GeoLite2-Country_*.tar.gz"]
 
 [[provider.maxmind.category]]
 name    = "ASN"
-enabled  = false
+enabled = false
 mapping = ["geoip"]
 source  = ["./GeoLite2-ASN_*.tar.gz"]
 
 [[provider.maxmind.category]]
 name    = "City"
-enabled  = false
+enabled = false
 mapping = ["geoip"]
 source  = ["./GeoLite2-City_*.tar.gz"]
 
-# Remote example — shared server in local network:
-# [provider.maxmind-net]
-# location = "remote"
-# type     = "ip"
-# enabled  = false
-# [[provider.maxmind-net.category]]
-# name    = "City"
-# mapping = ["geoip"]
-# source  = ["http://192.168.1.1:8080/GeoLite2-City.tar.gz"]
-
 # ---------------------------------------------------------------------------
 # DNS Provider
-# sinkhole per category, source = resolver IPs per category
+# source = resolver IPs per category, sinkhole = block page IPs
 # ---------------------------------------------------------------------------
 
 [provider.opendns]
 name     = "OpenDNS"
 location = "dns"
 type     = "domain"
-enabled  = true
+enabled  = false
 
 [[provider.opendns.category]]
 name     = "Malware/Phishing"
@@ -744,127 +734,19 @@ sinkhole = ["146.112.61.110", "::ffff:146.112.61.110"]
 
 # --------------------
 
+# Pi-hole — set source to your Pi-hole IP, sinkhole to its block page IP (usually 0.0.0.0).
+# The StevenBlack remote list above covers the same domains as the default Pi-hole blocklist.
+
 [provider.pihole]
-# uses the list of stevenblack
 location = "dns"
 type     = "domain"
 enabled  = false
 
 [[provider.pihole.category]]
-name     = "PiHole local"
+name     = "Pi-hole local"
 mapping  = ["ads"]
-source   = ["192.168.1.1"]
+source   = ["192.168.1.1"]          # replace with your Pi-hole IP
 sinkhole = ["0.0.0.0", "::", "::ffff:0.0.0.0"]
-
-# ---------------------------------------------------------------------------
-# Tier 0 Provider: defaults and network standards
-# normally you do not need to change, only activate for your working hosts OS
-# ---------------------------------------------------------------------------
-
-[provider.system-hosts]
-name     = "hosts"
-location = "local"
-type     = "domain"
-enabled  = false
-
-[[provider.system-hosts.category]]
-name    = "unix"
-tier    = 0
-enabled = true
-mapping = ["local"]
-source  = ["/etc/hosts"]
-
-[[provider.system-hosts.category]]
-name    = "windows"
-tier    = 0
-enabled = false
-mapping = ["local"]
-source  = ["C:\\\\Windows\\\\System32\\\\drivers\\\\etc\\\\hosts"]
-
-# --------------------
-
-[provider.definedip]
-location = "inline"
-type     = "ip"
-enabled  = true
-
-[[provider.definedip.category]]
-name    = "RFC1918 Private"
-enabled = true
-tier    = 0
-mapping = ["local"]
-source  = [
-  "10.0.0.0/8",
-  "172.16.0.0/12",
-  "192.168.0.0/16",
-]
-
-[[provider.definedip.category]]
-name    = "Loopback"
-enabled = true
-tier    = 0
-mapping = ["local"]
-source  = [
-  "127.0.0.0/8",
-  "::1/128",
-]
-
-[[provider.definedip.category]]
-name    = "Link-Local"
-enabled = true
-tier    = 0
-mapping = ["infrastructure"]
-source  = [
-  "169.254.0.0/16",
-  "fe80::/10",
-]
-
-[[provider.definedip.category]]
-name    = "Multicast"
-enabled = true
-tier    = 0
-mapping = ["infrastructure"]
-source  = [
-  "224.0.0.0/4",
-  "ff00::/8",
-]
-
-[[provider.definedip.category]]
-name    = "Broadcast"
-enabled = true
-tier    = 0
-mapping = ["infrastructure"]
-source  = [
-  "255.255.255.255/32",
-]
-
-[[provider.definedip.category]]
-name    = "Carrier-Grade NAT"
-enabled = true
-tier    = 0
-mapping = ["infrastructure"]
-source  = [
-  "100.64.0.0/10",
-]
-
-# --------------------
-
-[provider.loopback]
-location = "inline"
-type     = "domain"
-enabled  = true
-
-[[provider.loopback.category]]
-name    = "hostname"
-tier    = 0
-mapping = ["local"]
-source  = [
-  "localhost",
-  "localhost.localdomain",
-  "ip6-localhost",
-  "ip6-loopback",
-]
-
 
 """
 
@@ -896,7 +778,6 @@ def _strip_provider_sources(provider_cfg: dict) -> dict:
       stripped[key] = copy.deepcopy(provider_cfg[key])
 
   return stripped
-
 
 def load_provider_config(main_config_path: Path, config: dict) -> dict | None:
   """Load provider.toml, merge stripped version into config, return full config for cache.
@@ -940,7 +821,46 @@ def load_provider_config(main_config_path: Path, config: dict) -> dict | None:
 
   return provider_cfg
 
-def validate_altbrow_config(config: dict) -> str:
+def _build_cache_text(cache_path: Path | None, current_pv: str | None = None) -> str:
+  """Return a one-line cache metadata summary for --validate-config."""
+  if cache_path is None or not cache_path.exists():
+    return "Cache: not found."
+  import sqlite3
+  size_label = format_size(cache_path.stat().st_size)
+  try:
+    con = sqlite3.connect(cache_path)
+    def _meta(key: str) -> str | None:
+      row = con.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+      return row[0] if row else None
+    built_at     = (_meta("built_at") or "")[:10] or "unknown"
+    domain_count = _meta("domain_count")
+    ip_count     = _meta("ip_count")
+    cache_pv     = _meta("provider_config_version")
+    con.close()
+  except Exception:
+    return f"Cache: {size_label}, metadata unavailable."
+  if cache_pv:
+    pv_part = f"provider v{cache_pv}"
+    if current_pv and current_pv != cache_pv:
+      pv_part += f" (current: v{current_pv})"
+  else:
+    pv_part = None
+  if domain_count is not None and ip_count is not None:
+    counts_part = f"{int(domain_count):,} domains, {int(ip_count):,} IPs"
+  else:
+    counts_part = "rebuild cache for counts"
+  parts = [f"Cache: {size_label}", f"built {built_at}"]
+  if pv_part:
+    parts.append(pv_part)
+  parts.append(counts_part)
+  return ", ".join(parts) + "."
+
+def validate_altbrow_config(
+  config: dict,
+  cache_path: Path | None = None,
+  provider_config_version: str | None = None,
+  config_path: Path | None = None,
+) -> str:
   """Validate an altbrow config dictionary and return a human-readable summary.
 
   Checks all required sections (`[meta]`, `[client]`, `[client.profiles]`) and
@@ -950,6 +870,9 @@ def validate_altbrow_config(config: dict) -> str:
   Args:
     config: Merged altbrow config dict — must have been processed by
       load_provider_config() so config["provider"] is set.
+    cache_path: Path to the SQLite cache file (optional).
+    provider_config_version: Version string from provider.toml meta (optional).
+    config_path: Path to the active altbrow.toml — shown in output (optional).
 
   Returns:
     Multi-line string summarizing the active configuration.
@@ -1032,16 +955,19 @@ def validate_altbrow_config(config: dict) -> str:
   activity = "active" if use_session else "passive"
   consented = "with consented headers" if headers else "without consent headers"
 
- 
+  cache_text = _build_cache_text(cache_path, current_pv=provider_config_version)
 
   # --- description sentence ---
   lines = [
-    f"Altbrow Version v{__version__} reads with config Version {config_version} from {config_date}.",
+    f"Altbrow Version v{__version__} reads with config Version {config_version} from {config_date}"
+    + (f",\nread from {config_path.resolve()}." if config_path else "."),
     f"It operates {activity} {consented} and counts domains, cookies, html, jsonld and microdata.",
     f"Default structured output format is {output_text}.",
     f"It {'does' if 'microdata_vs_jsonld' in validation else 'does not'} analyse microdata vs jsonld comparison for the summary.",
+    "---",
     provider_text,
-    "Output may be written to STDOUT or to a file depending on CLI options."
+    "---",
+    cache_text,
   ]
 
   return "\n".join(lines)
@@ -1245,7 +1171,7 @@ def validate_provider_config(cfg: dict) -> None:
       if "tier" in c:
         tier = c["tier"]
         if not isinstance(tier, int) or tier < 0:
-          raise ConfigError(f"{cname} tier must be a non-negative integer >= 1 (0 is reserved for altbrow internals)")
+          raise ConfigError(f"{cname} tier must be a non-negative integer (0 = highest priority)")
 
       # --- mapping ---
       if "mapping" not in c:

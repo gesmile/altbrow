@@ -13,57 +13,45 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from altbrow import __version__
+from altbrow.utils import format_size
 from .config import LOCATION_DEFAULT_TIER
 
 logger = logging.getLogger(__name__)
 
 SCHEMA = """
-CREATE TABLE IF NOT EXISTS domains (
-  id                INTEGER PRIMARY KEY,
-  value             TEXT    NOT NULL,
-  registrable_domain TEXT,
-  category          TEXT    NOT NULL,
-  provider          TEXT    NOT NULL,
-  provider_location TEXT    NOT NULL,
-  category_name     TEXT,
-  updated_at        TEXT    NOT NULL,
-  subdomain_match   INTEGER NOT NULL DEFAULT 1,
-  tier              INTEGER NOT NULL DEFAULT 2,
-  UNIQUE(value, category, provider)
+CREATE TABLE IF NOT EXISTS provider_categories (
+  id              INTEGER PRIMARY KEY,
+  provider        TEXT    NOT NULL,
+  location        TEXT    NOT NULL,
+  category        TEXT    NOT NULL,
+  category_name   TEXT    NOT NULL DEFAULT '',
+  tier            INTEGER NOT NULL DEFAULT 2,
+  subdomain_match INTEGER NOT NULL DEFAULT 1,
+  entry_type      TEXT    NOT NULL,
+  UNIQUE(provider, category, category_name, entry_type)
 );
 
-CREATE INDEX IF NOT EXISTS idx_domains_value
-  ON domains(value);
-
-CREATE INDEX IF NOT EXISTS idx_domains_registrable
-  ON domains(registrable_domain);
-
-CREATE TABLE IF NOT EXISTS ips (
-  id                INTEGER PRIMARY KEY,
-  value             TEXT    NOT NULL,
-  is_cidr           INTEGER NOT NULL DEFAULT 0,
-  category          TEXT    NOT NULL,
-  provider          TEXT    NOT NULL,
-  provider_location TEXT    NOT NULL,
-  category_name     TEXT,
-  tier              INTEGER NOT NULL DEFAULT 2,
-  updated_at        TEXT    NOT NULL,
-  UNIQUE(value, category, provider)
+CREATE TABLE IF NOT EXISTS entries (
+  id                  INTEGER PRIMARY KEY,
+  value               TEXT    NOT NULL,
+  registrable_domain  TEXT,
+  is_cidr             INTEGER NOT NULL DEFAULT 0,
+  provider_cat_id     INTEGER NOT NULL REFERENCES provider_categories(id),
+  UNIQUE(value, provider_cat_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_ips_value
-  ON ips(value);
+CREATE INDEX IF NOT EXISTS idx_entries_value
+  ON entries(value);
+
+CREATE INDEX IF NOT EXISTS idx_entries_registrable
+  ON entries(registrable_domain)
+  WHERE registrable_domain IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS meta (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
 """
-
-
-def _now() -> str:
-  """Return current UTC time as ISO8601 string."""
-  return datetime.now(timezone.utc).isoformat()
 
 
 def _get_registrable_domain(domain: str) -> str | None:
@@ -100,22 +88,26 @@ def _is_cidr(value: str) -> bool:
   except ValueError:
     return False
 
-def _load_local_source(path_str: str, config_path: Path) -> list[str]:
-  """Read entries from a local file or glob pattern in altbrow list or hosts format.
 
-  Supports both plain domain/IP lists and hosts file format
-  (``0.0.0.0 domain`` / ``127.0.0.1 domain`` lines) via parse_entries().
+def _load_local_source(path_str: str, config_path: Path, provider_type: str = "") -> list[str]:
+  """Read entries from a local file or glob pattern.
+
+  Supports plain domain/IP lists, hosts file format, URL-first TSV/CSV,
+  and Netscape Bookmark HTML files. Format is detected per-file by suffix:
+  ``.html`` files are parsed with _parse_bookmark_html(); all other files
+  are parsed with parse_entries().
   Absolute paths (e.g. /etc/hosts) are used as-is.
   Glob patterns (e.g. ``./provider.d/*.txt``) expand to all matching files.
 
   Args:
     path_str: File path or glob pattern, absolute or relative to altbrow.toml.
     config_path: Path to altbrow.toml, used to resolve relative paths.
+    provider_type: Passed through to parse_entries() for format detection.
 
   Returns:
     List of domain or IP strings.
   """
-  from .fetch_remote import parse_entries
+  from .fetch_remote import _parse_bookmark_html, parse_entries
 
   source_path = Path(path_str)
   if not source_path.is_absolute():
@@ -128,9 +120,16 @@ def _load_local_source(path_str: str, config_path: Path) -> list[str]:
 
   entries = []
   for match in matches:
-    entries.extend(
-      parse_entries(match.read_text(encoding="utf-8", errors="replace"))
-    )
+    if match.suffix.lower() == ".html":
+      entries.extend(_parse_bookmark_html(match))
+    else:
+      entries.extend(
+        parse_entries(
+          match.read_text(encoding="utf-8", errors="replace"),
+          source_name=match.name,
+          provider_type=provider_type,
+        )
+      )
   return entries
 
 
@@ -168,10 +167,50 @@ def build_cache(
 
   con.executescript(SCHEMA)
 
-  now = _now()
-  domain_rows = []
-  ip_rows = []
-  active_providers = []
+  entry_rows: list[tuple] = []
+  active_providers: list[str] = []
+
+  # cache of (pname, location, category, cat_name, tier, subdomain_match, ptype) → pc_id
+  pc_cache: dict[tuple, int] = {}
+
+  def _get_pc_id(
+    pname: str,
+    location: str,
+    category: str,
+    cat_name: str | None,
+    tier: int,
+    subdomain_match: int,
+    ptype: str,
+  ) -> int:
+    """Insert provider category if new, return its id.
+
+    Args:
+      pname: Provider name.
+      location: Provider location (inline/local/remote/dns).
+      category: altbrow mapping category.
+      cat_name: Human-readable category name; None coerced to ''.
+      tier: Integer tier for winner selection.
+      subdomain_match: 1 if subdomain matching enabled, 0 otherwise.
+      ptype: 'domain' or 'ip'.
+
+    Returns:
+      Integer id from provider_categories table.
+    """
+    cat_name_db = cat_name or ""
+    key = (pname, location, category, cat_name_db, tier, subdomain_match, ptype)
+    if key in pc_cache:
+      return pc_cache[key]
+    con.execute("""
+      INSERT OR IGNORE INTO provider_categories
+        (provider, location, category, category_name, tier, subdomain_match, entry_type)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (pname, location, category, cat_name_db, tier, subdomain_match, ptype))
+    pc_id = con.execute("""
+      SELECT id FROM provider_categories
+      WHERE provider=? AND category=? AND category_name=? AND entry_type=?
+    """, (pname, category, cat_name_db, ptype)).fetchone()[0]
+    pc_cache[key] = pc_id
+    return pc_id
 
   providers = provider_config.get("provider", {})
 
@@ -202,18 +241,17 @@ def build_cache(
       from .fetch_remote import fetch_remote_provider
       for entry, ctx in fetch_remote_provider(pname, p):
         remote_tier = ctx.get("tier", LOCATION_DEFAULT_TIER["remote"])
-        if ctx["ptype"] == "domain":
+        cat_name = ctx["name"]
+        category = ctx["category"]
+        eptype = ctx["ptype"]
+        if eptype == "domain":
+          pc_id = _get_pc_id(pname, "remote", category, cat_name, remote_tier, subdomain_match, "domain")
           reg = _get_registrable_domain(entry)
-          domain_rows.append((
-            entry, reg, ctx["category"], pname,
-            "remote", ctx["category_name"], remote_tier, now, subdomain_match,
-          ))
-        elif ctx["ptype"] == "ip":
+          entry_rows.append((entry, reg, 0, pc_id))
+        elif eptype == "ip":
+          pc_id = _get_pc_id(pname, "remote", category, cat_name, remote_tier, subdomain_match, "ip")
           cidr_flag = 1 if _is_cidr(entry) else 0
-          ip_rows.append((
-            entry, cidr_flag, ctx["category"], pname,
-            "remote", ctx["category_name"], remote_tier, now,
-          ))
+          entry_rows.append((entry, None, cidr_flag, pc_id))
       continue
 
     for cat in p.get("category", []):
@@ -225,53 +263,41 @@ def build_cache(
       sources  = cat.get("source", [])
       tier     = cat.get("tier", LOCATION_DEFAULT_TIER.get(location, 2))
 
-      entries: list[str] = []
+      cat_entries: list[str] = []
 
       if location == "local":
         if "geoip" in mappings:
           continue  # handled by extract_geodbs(), not inserted into DB
         for src in sources:
-          entries.extend(_load_local_source(src, config_path))
+          cat_entries.extend(_load_local_source(src, config_path, provider_type=ptype))
 
       elif location == "inline":
-        entries = list(sources)
+        cat_entries = list(sources)
 
-      # Insert each entry × each mapping
-      for entry in entries:
+      for entry in cat_entries:
         entry = entry.strip().lower()
         if not entry:
           continue
 
         for category in mappings:
-
           if ptype == "domain":
+            pc_id = _get_pc_id(pname, location, category, cat_name, tier, subdomain_match, "domain")
             reg = _get_registrable_domain(entry)
-            domain_rows.append((
-              entry, reg, category, pname,
-              location, cat_name, tier, now, subdomain_match,
-            ))
+            entry_rows.append((entry, reg, 0, pc_id))
 
           elif ptype == "ip":
+            pc_id = _get_pc_id(pname, location, category, cat_name, tier, subdomain_match, "ip")
             cidr_flag = 1 if _is_cidr(entry) else 0
-            ip_rows.append((
-              entry, cidr_flag, category, pname,
-              location, cat_name, tier, now,
-            ))
+            entry_rows.append((entry, None, cidr_flag, pc_id))
 
   con.executemany(
-    """INSERT OR IGNORE INTO domains
-       (value, registrable_domain, category, provider, provider_location, category_name, tier, updated_at, subdomain_match)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-    domain_rows,
+    """INSERT OR IGNORE INTO entries
+       (value, registrable_domain, is_cidr, provider_cat_id)
+       VALUES (?, ?, ?, ?)""",
+    entry_rows,
   )
 
-  con.executemany(
-    """INSERT OR IGNORE INTO ips
-       (value, is_cidr, category, provider, provider_location, category_name, tier, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-    ip_rows,
-  )
-
+  now = datetime.now(timezone.utc).isoformat()
   con.execute(
     "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
     ("built_at", now),
@@ -280,6 +306,22 @@ def build_cache(
     "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
     ("altbrow_version", __version__),
   )
+  domain_count = len(set(row[0] for row in entry_rows if row[1] is not None))
+  ip_count     = len(set(row[0] for row in entry_rows if row[1] is None))
+  con.execute(
+    "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+    ("domain_count", str(domain_count)),
+  )
+  con.execute(
+    "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+    ("ip_count", str(ip_count)),
+  )
+  pv = str(provider_config.get("meta", {}).get("version", ""))
+  if pv:
+    con.execute(
+      "INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)",
+      ("provider_config_version", pv),
+    )
 
   con.commit()
   con.close()
@@ -289,14 +331,15 @@ def build_cache(
   con2.execute("VACUUM")
   con2.close()
 
+  size_label = format_size(cache_path.stat().st_size)
   logger.info(
-    "Cache built: %d domain entries, %d ip entries from %d providers (%s)",
-    len(domain_rows),
-    len(ip_rows),
+    "Cache built: %s (%s) — %d entries from %d providers (%s)",
+    cache_path,
+    size_label,
+    len(entry_rows),
     len(active_providers),
     ", ".join(active_providers),
   )
-
 
 def _ensure_schema(cache_path: Path) -> None:
   """Create DB tables if they do not exist yet.
@@ -329,7 +372,7 @@ def get_or_build_cache(
   """Return cache path, initialising schema and building lazily if needed.
 
   Always ensures the DB schema exists. If provider_config is given and
-  the DB has no domain entries yet, triggers a full build.
+  the DB has no entries yet, triggers a full build.
 
   Args:
     cache_path: Expected path of the SQLite cache file.
@@ -346,12 +389,28 @@ def get_or_build_cache(
 
   # check if DB is empty — build if so
   con = sqlite3.connect(cache_path)
-  count = con.execute("SELECT COUNT(*) FROM domains").fetchone()[0]
+  count = con.execute("SELECT COUNT(*) FROM entries").fetchone()[0]
   con.close()
 
   if count == 0:
     logger.info("Cache empty, building...")
     build_cache(cache_path, provider_config, config_path)
+
+  # staleness check — warn if cache is older than 7 days
+  con = sqlite3.connect(cache_path)
+  row = con.execute("SELECT value FROM meta WHERE key = 'built_at'").fetchone()
+  con.close()
+
+  if row:
+    try:
+      built_at = datetime.fromisoformat(row[0])
+      age_days = (datetime.now(timezone.utc) - built_at).days
+      if age_days >= 7:
+        logger.warning(
+          "Cache is %d days old — consider rebuilding with --build-cache", age_days
+        )
+    except Exception:
+      pass
 
   return cache_path
 
@@ -360,20 +419,24 @@ def lookup_domain(
   domain: str,
   cache_path: Path,
   config: dict | None = None,
+  resolved_ips: list[str] | None = None,
 ) -> list[dict]:
   """Look up a domain, merging static DB and live DNS provider results.
 
-  Tries exact value match first, then registrable domain fallback.
+  Tries exact value match first, then registrable domain fallback via JOIN.
   If config is provided and contains dns providers, queries them live in parallel.
 
   Args:
     domain: Fully qualified domain name to look up.
     cache_path: Path to the SQLite cache file.
     config: Merged altbrow config dict for DNS provider lookup. Optional.
+    resolved_ips: Optional list; if provided, the resolved IPv4 string is appended
+      when resolve-domains succeeds. Lets callers capture the IP without a second
+      socket call.
 
   Returns:
     List of category dicts with keys:
-      category, provider, provider_location, category_name, tier
+      category, provider, location, name, tier
     Empty list if no match.
   """
   domain = domain.lower()
@@ -382,28 +445,18 @@ def lookup_domain(
   con = sqlite3.connect(cache_path)
   con.row_factory = sqlite3.Row
 
-  # exact match — always
-  rows_exact = con.execute(
-    "SELECT * FROM domains WHERE value = ?",
-    (domain,),
-  ).fetchall()
-
-  # registrable domain match — only for providers with subdomain_match = 1
-  # always run, merged with exact results
-  rows_reg = []
-  if reg:
-    rows_reg = con.execute(
-      "SELECT * FROM domains WHERE registrable_domain = ? AND subdomain_match = 1",
-      (reg,),
-    ).fetchall()
-
-  # merge: exact match + registrable match, skip rows already covered by exact
-  exact_ids = {r["id"] for r in rows_exact}
-  rows = list(rows_exact) + [r for r in rows_reg if r["id"] not in exact_ids]
+  rows = con.execute("""
+    SELECT pc.category, pc.provider, pc.location,
+           pc.category_name, pc.tier
+    FROM entries e
+    JOIN provider_categories pc ON pc.id = e.provider_cat_id
+    WHERE pc.entry_type = 'domain'
+      AND (e.value = ? OR (e.registrable_domain = ? AND pc.subdomain_match = 1))
+  """, (domain, reg)).fetchall()
 
   con.close()
 
-  seen = set()
+  seen: set[tuple] = set()
   results = []
 
   for r in rows:
@@ -411,26 +464,39 @@ def lookup_domain(
     if key not in seen:
       seen.add(key)
       results.append({
-        "category":          r["category"],
-        "provider":          r["provider"],
-        "provider_location": r["provider_location"],
-        "category_name":     r["category_name"],
-        "tier":              r["tier"],
+        "category": r["category"],
+        "provider": r["provider"],
+        "location": r["location"],
+        "name":     r["category_name"],
+        "tier":     r["tier"],
       })
 
-  # DNS live lookup — all enabled DNS providers are always queried.
-  # DNS providers (Pi-hole, OpenDNS) are independent classification sources.
-  # dns-resolve-filter controls which provider categories are queried
-  # inside dns_provider_lookup, not whether DNS runs at all.
+  # DNS live lookup — gated by dns-resolve-filter when configured.
+  # No filter: all domains are queried unconditionally.
+  # Filter set: DNS only runs if at least one static cache hit passes the filter.
+  # Clean domains (no static hit) with an active filter are skipped for performance.
   if config:
-    from .dns_lookup import dns_provider_lookup
-    logger.debug("DNS provider lookup for: %s", domain)
-    dns_results = dns_provider_lookup(domain, config)
-    if dns_results:
-      existing = {(r["category"], r["provider"]) for r in results}
-      for r in dns_results:
-        if (r["category"], r["provider"]) not in existing:
-          results.append(r)
+    from .dns_lookup import dns_provider_lookup, _should_query_category
+    dns_filter = config.get("dns-resolve-filter", {})
+
+    if not dns_filter:
+      should_query_dns = True
+    else:
+      should_query_dns = any(
+        _should_query_category({"mapping": [r["category"]], "tier": r["tier"]}, dns_filter)
+        for r in results
+      )
+
+    if should_query_dns:
+      logger.debug("DNS provider lookup for: %s", domain)
+      dns_results = dns_provider_lookup(domain, config)
+      if dns_results:
+        existing = {(r["category"], r["provider"]) for r in results}
+        for r in dns_results:
+          if (r["category"], r["provider"]) not in existing:
+            results.append(r)
+    else:
+      logger.debug("DNS lookup skipped for %s (dns-resolve-filter)", domain)
 
   # resolve-domains: resolve domain to IP and check against IP provider lists
   if config:
@@ -442,6 +508,8 @@ def lookup_domain(
         addr_infos = _socket.getaddrinfo(domain, None, _socket.AF_INET)
         if addr_infos:
           ip_str = addr_infos[0][4][0]
+          if resolved_ips is not None:
+            resolved_ips.append(ip_str)
           ip_results = lookup_ip(ip_str, cache_path)
           if ip_results:
             existing = {(r["category"], r["provider"]) for r in results}
@@ -458,7 +526,7 @@ def lookup_domain(
 def lookup_ip(ip_str: str, cache_path: Path) -> list[dict]:
   """Look up an IP address, matching exact IPs and CIDRs.
 
-  Exact matches via SQL, CIDR matches resolved in Python via ipaddress stdlib.
+  Exact matches via SQL JOIN, CIDR matches resolved in Python via ipaddress stdlib.
   DNS results are not merged for IPs (DNS providers work on domain level).
 
   Args:
@@ -467,7 +535,7 @@ def lookup_ip(ip_str: str, cache_path: Path) -> list[dict]:
 
   Returns:
     List of category dicts with keys:
-      category, provider, provider_location, category_name
+      category, provider, location, name, tier
     Empty list if no match or invalid IP.
   """
   try:
@@ -479,25 +547,32 @@ def lookup_ip(ip_str: str, cache_path: Path) -> list[dict]:
   con = sqlite3.connect(cache_path)
   con.row_factory = sqlite3.Row
 
-  rows = con.execute(
-    "SELECT * FROM ips WHERE value = ? AND is_cidr = 0",
-    (ip_str,),
-  ).fetchall()
+  rows = con.execute("""
+    SELECT pc.category, pc.provider, pc.location,
+           pc.category_name, pc.tier
+    FROM entries e
+    JOIN provider_categories pc ON pc.id = e.provider_cat_id
+    WHERE e.value = ? AND e.is_cidr = 0 AND pc.entry_type = 'ip'
+  """, (ip_str,)).fetchall()
 
   results = [
     {
-      "category":          r["category"],
-      "provider":          r["provider"],
-      "provider_location": r["provider_location"],
-      "category_name":     r["category_name"],
-      "tier":              r["tier"],
+      "category": r["category"],
+      "provider": r["provider"],
+      "location": r["location"],
+      "name":     r["category_name"],
+      "tier":     r["tier"],
     }
     for r in rows
   ]
 
-  cidr_rows = con.execute(
-    "SELECT * FROM ips WHERE is_cidr = 1"
-  ).fetchall()
+  cidr_rows = con.execute("""
+    SELECT e.value, pc.category, pc.provider, pc.location,
+           pc.category_name, pc.tier
+    FROM entries e
+    JOIN provider_categories pc ON pc.id = e.provider_cat_id
+    WHERE e.is_cidr = 1 AND pc.entry_type = 'ip'
+  """).fetchall()
 
   con.close()
 
@@ -506,11 +581,11 @@ def lookup_ip(ip_str: str, cache_path: Path) -> list[dict]:
       network = ipaddress.ip_network(row["value"], strict=False)
       if ip in network:
         results.append({
-          "category":          row["category"],
-          "provider":          row["provider"],
-          "provider_location": row["provider_location"],
-          "category_name":     row["category_name"],
-          "tier":              row["tier"],
+          "category": row["category"],
+          "provider": row["provider"],
+          "location": row["location"],
+          "name":     row["category_name"],
+          "tier":     row["tier"],
         })
     except ValueError:
       logger.warning("Invalid CIDR in cache: %s", row["value"])

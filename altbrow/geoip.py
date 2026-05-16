@@ -200,9 +200,7 @@ def lookup_ip(ip_str: str, readers: GeoReaders) -> dict:
       rec = country_reader.get(ip_str)
       if rec:
         country = rec.get("country") or rec.get("registered_country", {})
-        result["country_code"] = country.get("iso_code")
-        names = country.get("names", {})
-        result["country_name"] = names.get("en")
+        result["country"] = country.get("iso_code")
         if readers.city and rec.get("city"):
           city_names = rec["city"].get("names", {})
           result["city"] = city_names.get("en")
@@ -214,8 +212,8 @@ def lookup_ip(ip_str: str, readers: GeoReaders) -> dict:
       rec = readers.asn.get(ip_str)
       if rec:
         asn_num = rec.get("autonomous_system_number")
-        result["asn"]     = f"AS{asn_num}" if asn_num else None
-        result["asn_org"] = rec.get("autonomous_system_organization")
+        result["asn"]    = f"AS{asn_num}" if asn_num else None
+        result["org"] = rec.get("autonomous_system_organization")
     except Exception as exc:
       logger.debug("GeoIP ASN lookup failed for %s: %s", ip_str, exc)
 
@@ -241,7 +239,7 @@ def lookup_domain(domain: str, readers: GeoReaders) -> dict:
     if not results:
       results = socket.getaddrinfo(domain, None)
     ip = results[0][4][0]
-    return lookup_ip(ip, readers)
+    return {"ip": ip, **lookup_ip(ip, readers)}
   except Exception as exc:
     logger.debug("GeoIP domain resolve failed for %s: %s", domain, exc)
     return {}
@@ -260,15 +258,15 @@ def format_geo(geo: dict) -> str:
     return ""
 
   parts = []
-  loc = geo.get("country_code", "")
+  loc = geo.get("country", "")
   if geo.get("city"):
     loc += f"/{geo['city']}"
   if loc:
     parts.append(loc)
   if geo.get("asn"):
     asn_str = geo["asn"]
-    if geo.get("asn_org"):
-      asn_str += f" {geo['asn_org']}"
+    if geo.get("org"):
+      asn_str += f" {geo['org']}"
     parts.append(asn_str)
 
   return " ".join(parts) if parts else ""

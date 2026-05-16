@@ -56,7 +56,7 @@ def extract_data(fetch_result: dict, cache_path: Path, config: dict | None = Non
   Microdata).
 
   When the target URL itself is a bare IP address, that IP is added to
-  external_ips using classify_ip() so RFC1918 and other provider matches
+  ips using classify_ip() so RFC1918 and other provider matches
   are visible in the output even when no HTML links were found.
 
   Args:
@@ -66,8 +66,8 @@ def extract_data(fetch_result: dict, cache_path: Path, config: dict | None = Non
 
   Returns:
     Dict with keys:
-      structured_data - JSON-LD and Microdata blocks
-      signals         - external_domains, external_ips, cookies
+      data - JSON-LD and Microdata blocks
+      signals         - domains, ips, cookies
   """
   html        = fetch_result["html"]
   orig_url    = fetch_result["url"]        # original URL before redirects
@@ -83,21 +83,27 @@ def extract_data(fetch_result: dict, cache_path: Path, config: dict | None = Non
   soup        = BeautifulSoup(html, "lxml")
 
   # ---------- Structured Data ----------
-  structured = extract(
+  _raw = extract(
     html,
     base_url=base_url,
     syntaxes=["json-ld", "microdata"],
   )
+  structured = {
+    "jsonld": _raw.get("json-ld", []),
+    "micro":  _raw.get("microdata", []),
+  }
 
   # ---------- Classify target host ----------
   classified_ips: list[dict] = []
 
   if _is_ip_address(page_domain):
     ip_result = classify_ip(page_domain, cache_path)
-    ip_result["occurrence"] = "TARGET"
+    ip_result["occ"] = {"target": 1}
     if geo_readers:
-      from .geoip import lookup_ip as _geo_ip, format_geo
-      ip_result["geo"] = format_geo(_geo_ip(page_domain, geo_readers))
+      from .geoip import lookup_ip as _geo_ip
+      geo = {k: v for k, v in _geo_ip(page_domain, geo_readers).items() if v is not None}
+      if geo:
+        ip_result["geo"] = geo
     classified_ips.append(ip_result)
 
   # TARGET domain entry — only for real hostnames, not bare IPs
@@ -108,7 +114,7 @@ def extract_data(fetch_result: dict, cache_path: Path, config: dict | None = Non
     dns_domain = orig_host if orig_host and orig_host != page_domain else page_domain
     target_result = classify_domain(dns_domain, dns_domain, cache_path, config)
     target_result["value"] = page_domain  # display final domain
-    target_result["occurrence"] = "TARGET"
+    target_result["occ"] = {"target": 1}
 
   # ---------- External Domains ----------
   # track occurrence per domain: asset | link | mixed
@@ -118,7 +124,7 @@ def extract_data(fetch_result: dict, cache_path: Path, config: dict | None = Non
   # TODO: COOKIE — domains found only in Set-Cookie Domain= attribute,
   #       not present in any HTML tag. Requires classify_cookies() integration
   #       into the domain signal pipeline. See OCCURRENCE.md.
-  domain_occurrence: dict[str, set] = {}
+  domain_occurrence: dict[str, dict[str, int]] = {}
 
   for tag in soup.find_all(list(_ASSET_TAGS) + list(_LINK_TAGS)):
     attr = _ASSET_TAGS.get(tag.name) or _LINK_TAGS.get(tag.name)
@@ -131,40 +137,53 @@ def extract_data(fetch_result: dict, cache_path: Path, config: dict | None = Non
       continue
 
     kind = "asset" if tag.name in _ASSET_TAGS else "link"
-    domain_occurrence.setdefault(parsed.netloc, set()).add(kind)
+    counts = domain_occurrence.setdefault(parsed.netloc, {})
+    counts[kind] = counts.get(kind, 0) + 1
 
-  # add geo data to a result dict in-place
-  def _add_geo(result: dict, name: str) -> None:
+  def _add_domain_ip(result: dict, name: str) -> None:
+    """Attach resolved ip+geo to a domain result dict.
+
+    When GeoIP is available, populates result["ip"] with {"value": ..., "geo": {...}}.
+    Falls back to result["_resolved_ip"] set by classify_domain() when GeoIP is absent.
+    Cleans up the internal _resolved_ip key afterward.
+    """
     if geo_readers and result:
-      from .geoip import lookup_domain as _geo_d, format_geo
-      result["geo"] = format_geo(_geo_d(name, geo_readers))
+      from .geoip import lookup_domain as _geo_d
+      geo_full = _geo_d(name, geo_readers)
+      ip_str   = geo_full.pop("ip", None)
+      geo_dict = {k: v for k, v in geo_full.items() if v is not None}
+      if ip_str or geo_dict:
+        ip_obj: dict = {}
+        if ip_str:
+          ip_obj["addr"] = ip_str
+        if geo_dict:
+          ip_obj["geo"] = geo_dict
+        result["ip"] = ip_obj
+    elif "_resolved_ip" in result:
+      result["ip"] = {"addr": result["_resolved_ip"]}
+    result.pop("_resolved_ip", None)
 
   if target_result:
-    _add_geo(target_result, target_result["value"])
+    _add_domain_ip(target_result, target_result["value"])
   classified_domains = [target_result] if target_result else []
 
   for netloc, kinds in sorted(domain_occurrence.items()):
-    if "asset" in kinds and "link" in kinds:
-      occurrence = "MIXED"
-    elif "asset" in kinds:
-      occurrence = "ASSET"
-    else:
-      occurrence = "LINK_ONLY"
-
     # strip port for IP/domain check
     host = netloc.rsplit(":", 1)[0].strip("[]")
 
     if _is_ip_address(host):
       ip_result = classify_ip(host, cache_path)
-      ip_result["occurrence"] = occurrence
+      ip_result["occ"] = kinds
       if geo_readers:
-        from .geoip import lookup_ip as _geo_ip, format_geo
-        ip_result["geo"] = format_geo(_geo_ip(host, geo_readers))
+        from .geoip import lookup_ip as _geo_ip
+        geo = {k: v for k, v in _geo_ip(host, geo_readers).items() if v is not None}
+        if geo:
+          ip_result["geo"] = geo
       classified_ips.append(ip_result)
     else:
       result = classify_domain(netloc, page_domain, cache_path, config)
-      result["occurrence"] = occurrence
-      _add_geo(result, netloc)
+      result["occ"] = kinds
+      _add_domain_ip(result, netloc)
       classified_domains.append(result)
 
   # ---------- Cookies ----------
@@ -181,10 +200,10 @@ def extract_data(fetch_result: dict, cache_path: Path, config: dict | None = Non
       logger.warning("Cookie parsing failed: %s", exc)
 
   return {
-    "structured_data": structured,
+    "data": structured,
     "signals": {
-      "external_domains": classified_domains,
-      "external_ips":     classified_ips,
+      "domains": classified_domains,
+      "ips":     classified_ips,
       "cookies":          classified_cookies,
     },
   }

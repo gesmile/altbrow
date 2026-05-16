@@ -74,12 +74,11 @@ def classify_domain(
 
   Returns:
     Dict with keys:
-      value             - normalised domain string
-      registrable_domain - e.g. 'example.com'
-      relation          - 'FIRST_PARTY' | 'SUBDOMAIN' | 'PEER' | 'EXTERNAL'
-      categories        - list of dicts (category, provider,
-                          provider_location, category_name)
-                          empty list if no provider match
+      value      - normalised domain string
+      apex       - registrable domain, e.g. 'example.com'
+      rel        - 'FIRST_PARTY' | 'SUBDOMAIN' | 'PEER' | 'EXTERNAL'
+      categories - list of dicts (category, provider, location, name, tier)
+                   empty list if no provider match
   """
   domain      = domain.lower()
   page_domain = page_domain.lower()
@@ -87,17 +86,24 @@ def classify_domain(
   reg_domain = get_registrable_domain(domain)
   relation   = _relation(domain, page_domain)
 
+  _resolved_ips: list[str] = []
   categories = sorted(
-    lookup_domain(domain, cache_path, config),
+    lookup_domain(domain, cache_path, config, _resolved_ips),
     key=lambda c: c.get("tier", 2),
   )
+  for i, c in enumerate(categories):
+    c["tier"] = i
 
-  return {
-    "value":              domain,
-    "registrable_domain": reg_domain,
-    "relation":           relation,
-    "categories":         categories,
+  result: dict = {
+    "value":      domain,
+    "apex":       reg_domain,
+    "rel":        relation,
+    "cat":        categories[0]["category"] if categories else "unknown",
+    "categories": categories,
   }
+  if _resolved_ips:
+    result["_resolved_ip"] = _resolved_ips[0]
+  return result
 
 
 def classify_ip(
@@ -115,18 +121,20 @@ def classify_ip(
   Returns:
     Dict with keys:
       value      - original IP string
-      relation   - always 'EXTERNAL' (IPs are never first-party)
-      categories - list of dicts (category, provider,
-                   provider_location, category_name)
+      rel        - always 'EXTERNAL' (IPs are never first-party)
+      categories - list of dicts (category, provider, location, name, tier)
                    empty list if no match
   """
   categories = sorted(
     lookup_ip(ip_str, cache_path),
     key=lambda c: c.get("tier", 2),
   )
+  for i, c in enumerate(categories):
+    c["tier"] = i
 
   return {
     "value":      ip_str,
-    "relation":   "EXTERNAL",
+    "rel":        "EXTERNAL",
+    "cat":        categories[0]["category"] if categories else "unknown",
     "categories": categories,
   }

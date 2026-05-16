@@ -204,11 +204,11 @@ def _query_category(
         domain, pname, cat_name, resolver_ip,
       )
       return {
-        "category":          mappings[0],
-        "provider":          pname,
-        "provider_location": "dns",
-        "category_name":     cat_name,
-        "tier":              tier,
+        "category": mappings[0],
+        "provider": pname,
+        "location": "dns",
+        "name":     cat_name,
+        "tier":     tier,
       }
     # not in sinkhole — domain is not blocked by this provider
     return None

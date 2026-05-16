@@ -139,9 +139,18 @@ def main() -> int:
   if not args.check_cert:
     client_profile["check_cert"] = False
 
+  # --- cache ---
+  cache_path = config_path.parent / ".altbrow.cache"
+
   if args.validate_config:
     try:
-      text = validate_altbrow_config(config)
+      pv = str(provider_config.get("meta", {}).get("version", "")) if provider_config else None
+      text = validate_altbrow_config(
+        config,
+        cache_path=cache_path,
+        provider_config_version=pv or None,
+        config_path=config_path,
+      )
       print(text)
       if args.verbose >= 1:
         import json
@@ -157,9 +166,6 @@ def main() -> int:
     except ConfigError as exc:
       logger.error("Config validation failed: %s", exc)
       return 3
-
-  # --- cache ---
-  cache_path = config_path.parent / ".altbrow.cache"
 
   if args.build_cache:
     if provider_config is None:
