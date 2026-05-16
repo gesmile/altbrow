@@ -258,6 +258,8 @@ See [docs/exitcodes.md](docs/docs/exitcodes.md) for the full reference.
 - **Category hardening**: `validate_provider_config()` does not prevent users from setting `mapping = ["unknown"]` or `mapping = ["geoip"]` — separate ticket
 - **Tier semantics**: config `tier` (sort priority) vs. output `tier` (sequential rank 0,1,2…) — `classify_domain.py` overwrites the stored value after sorting; consider renaming output field to `rank` to avoid confusion
 - **`SELF_REF`** occurrence type (or shorter name): domains found only in JSON-LD/Microdata with no HTML tag traffic — add to `docs/provider.md` relation categories once implemented
+- **`dns-resolve-filter` validate-config wording**: when the section is absent, `--validate-config` prints "N categories are validated by dns-resolve-filter" — misleading, because without a filter all non-DNS categories unconditionally trigger live DNS queries (no filtering at all). Should distinguish "no filter active → all queried" from "filter active → N categories matched"
+- **`_should_query_category` bug — `enabled-categories = []`**: `dns_lookup.py:49` uses `not enabled_cats` which treats `[]` (explicitly disabled) identically to `None` (key absent). The documented example "Disable all DNS verification: `enabled-categories = []` + `filter-mode = "and"`" is broken — for any domain with a cache hit, line 49 short-circuits with `return True` before the `filter_mode = "and"` branch (which would correctly return `False`). Fix: change `if not enabled_cats and max_tier is None` to `if enabled_cats is None and max_tier is None`.
 
 ---
 
