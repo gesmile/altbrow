@@ -1,5 +1,6 @@
-# API Config of Altbrow
+# Configuration API
 
+Python API for configuration discovery, loading, and validation.
 
 ::: altbrow.config.ConfigError
 
@@ -8,9 +9,3 @@
 ::: altbrow.config.get_client_profile
 
 ::: altbrow.config.validate_altbrow_config
-
-
-## altbrow.toml
-
-
-## domains.toml

@@ -1,23 +1,25 @@
-# Altbrow
+# Altbrow — Developer Documentation
 
-Developer documentation.
+Altbrow is a Python CLI tool for deep analysis of websites: semantic structure,
+external dependencies, cookies, and structured data (JSON-LD, Microdata).
 
+## Documentation
 
+| Page | Content |
+|------|---------|
+| [Provider System](provider.md) | Provider schema, categories, tier, file formats, DNS resolve filter |
+| [Exit Codes](exitcodes.md) | CLI exit codes with implementation status |
+| [Configuration API](config.md) | Python API for config loading and validation (autodoc) |
+| [API Reference](api.md) | All modules — functions, parameters, return types (autodoc) |
 
-## Autodoc with mkdocs
+## Quick start
 
-For full documentation visit [mkdocs.org](https://www.mkdocs.org).
+```bash
+pip install -e .[dev]
 
-### Commands
+altbrow --validate-config   # check config
+altbrow --build-cache       # build provider cache
+altbrow <URL>               # analyse a URL
+```
 
-* `mkdocs new [dir-name]` - Create a new project.
-* `mkdocs serve` - Start the live-reloading docs server.
-* `mkdocs build` - Build the documentation site.
-* `mkdocs -h` - Print help message and exit.
-
-### Project layout
-
-    mkdocs.yml    # The configuration file.
-    docs/
-        index.md  # The documentation homepage.
-        ...       # Other markdown pages, images and other files.
+See [README](../../README.md) for install instructions and usage examples.

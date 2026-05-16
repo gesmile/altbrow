@@ -2,8 +2,10 @@ site_name: Altbrow
 
 nav:
   - Home: index.md
+  - Provider: provider.md
   - Configuration API: api.md
   - Configuration TOML: config.md
+  - Exit Codes: exitcodes.md
 
 plugins:
   - mkdocstrings:
