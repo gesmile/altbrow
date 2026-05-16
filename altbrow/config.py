@@ -53,10 +53,7 @@ RESOLVE_DEFAULTS: dict = {
 _MAJESTIC_DOWNLOAD = (
   r"# Download: curl -s https://downloads.majestic.com/majestic_million.csv"
   r" | awk -F ',' 'NR>1{print $3}'"
-  r" > ~/.altbrow/majestic_million.txt"
-)
-_OISD_DOWNLOAD = (
-  r"# Download list and convert to altbrow format, e.g. `curl -s https://big.oisd.nl/ | sed -n 's/^||\([a-zA-Z0-9._-]*\)[\.^].*/\1/p' >"
+  r" > ~/.altbrow/majestic_million.csv"
 )
 
 class ConfigError(Exception):
@@ -178,8 +175,7 @@ def get_client_profile(config: dict, override: str | None) -> dict:
   return merged
 
 def default_config_altbrow() -> str:
-  return f"""
-# default config file: altbrow.toml
+  return f"""# default config file: altbrow.toml
 
 # good location: ~/.altbrow/altbrow.toml
 # same for provider.toml and cache file location
@@ -241,9 +237,8 @@ fetch_subresources = 1
 """
 
 def default_config_provider() -> str:
-  return f"""
-# Provider system config: provider.toml
-#
+  return f"""# Provider system config: provider.toml
+
 # Activate the provider system by setting `meta.use-provider = true` in altbrow.toml.
 # The cache file (.altbrow.cache) is built next to altbrow.toml on first run or via --build-cache.
 
@@ -278,7 +273,7 @@ def default_config_provider() -> str:
 # Categories
 # ---------------------------------------------------------------------------
 
-# 8 standard categories:
+# 10 useable categories:
 #   ads           - advertising networks and ad delivery
 #   analytics     - user behavior measurement and reporting
 #   cdn           - content delivery networks and static asset hosting
@@ -287,19 +282,15 @@ def default_config_provider() -> str:
 #   suspicious    - unverified or potentially hostile
 #   telemetry     - error reporting, performance monitoring, device telemetry
 #   tracking      - cross-site user tracking and profiling
-
-# 4 special categories:
 #   local          - RFC1918, localhost, loopback, your own domains
 #   infrastructure - web standards, DNS resolvers, technical endpoints
-#   unknown        - no category match (automatic)
+
+# config category:
 #   geoip          - used for location service, not a regular category
 
-# automatic categories (derived from structure, no provider needed):
-#   FIRST_PARTY   - same registrable domain as the analysed page
-#   PEER          - sibling subdomain of the analysed page
-#   SUBDOMAIN     - subdomain of the analysed page
-#   SELF_REF      - appears only in JSON-LD @id / Microdata, not in HTML traffic
-#   EXTERNAL      - all other external domains
+[meta]
+version = 1
+created = "{date.today()}"
 
 # ---------------------------------------------------------------------------
 # Resolve Configuration
@@ -311,266 +302,73 @@ resolver         = ["os"]      # "os" = system resolver, or explicit IPs: ["1.1.
 resolver-timeout = 2           # seconds per DNS query
 
 # ---------------------------------------------------------------------------
+
 # DNS Resolve Filter
 # Controls which provider categories trigger a live DNS query.
-# Empty section: all enabled DNS provider categories are queried.
-#
+# Empty section: all enabled DNS provider categories are queried (always DNS even unknown)
 # filter-mode = "or"  → category match OR  tier <= max-tier
 # filter-mode = "and" → category match AND tier <= max-tier
 # Disable all DNS queries: set enabled-categories = [] with filter-mode = "and"
 #                          or simply disable all DNS providers below.
-# ---------------------------------------------------------------------------
 
 [dns-resolve-filter]
-enabled-categories = ["malware", "suspicious"]
-max-tier    = 1
-filter-mode = "and"
-
-[meta]
-version = 1
-created = "{date.today()}"
+# all DNS providers queried unconditionally — uncomment below to filter:
+#enabled-categories = ["malware", "suspicious","tracking","ads","analytics","social","telemetry"]
+#max-tier    = 2
+#filter-mode = "and"
 
 # ---------------------------------------------------------------------------
-# Inline Domain Provider — examples
+# Inline Domain Provider — example inline
 # ---------------------------------------------------------------------------
 
-[provider.example]
+[provider.osupdate]
 location = "inline"
 type     = "domain"
 enabled  = true
 
-[[provider.example.category]]
-name    = "Software Updates"
+[[provider.osupdate.category]]
+name    = "cdn"
 mapping = ["cdn"]
 source  = [
   "windowsupdate.com",       # Microsoft
   "swcdn.apple.com",         # macOS
   "deb.debian.org",          # Debian
-]
-
-[[provider.example.category]]
-name    = "Known Analytics"
-mapping = ["analytics"]
-source  = [
-  "google-analytics.com",
-  "matomo.org",
-  "plausible.io",
-]
+  ]
 
 # ---------------------------------------------------------------------------
-# Inline IP Provider
-# ---------------------------------------------------------------------------
-
-[provider.definedip]
-location = "inline"
-type     = "ip"
-enabled  = true
-
-[[provider.definedip.category]]
-name    = "RFC1918 Private"
-mapping = ["local"]
-source  = [
-  "10.0.0.0/8",
-  "172.16.0.0/12",
-  "192.168.0.0/16",
-]
-
-[[provider.definedip.category]]
-name    = "Loopback"
-mapping = ["local"]
-source  = [
-  "127.0.0.0/8",
-  "::1/128",
-]
-
-[[provider.definedip.category]]
-name    = "Link-Local"
-tier    = 99
-mapping = ["infrastructure"]
-source  = [
-  "169.254.0.0/16",
-  "fe80::/10",
-]
-
-[[provider.definedip.category]]
-name    = "Multicast"
-tier    = 99
-mapping = ["infrastructure"]
-source  = [
-  "224.0.0.0/4",
-  "ff00::/8",
-]
-
-[[provider.definedip.category]]
-name    = "Broadcast"
-tier    = 99
-mapping = ["infrastructure"]
-source  = [
-  "255.255.255.255/32",
-]
-
-[[provider.definedip.category]]
-name    = "Carrier-Grade NAT"
-tier    = 99
-mapping = ["infrastructure"]
-source  = [
-  "100.64.0.0/10",
-]
-
-[[provider.definedip.category]]
-name    = "Public DNS Resolvers"
-tier    = 99
-mapping = ["infrastructure"]
-source  = [
-  "1.1.1.1",          # Cloudflare
-  "8.8.8.8",          # Google
-  "9.9.9.9",          # Quad9
-  "208.67.222.222",   # OpenDNS
-]
-
-# ---------------------------------------------------------------------------
-# Inline Domain Provider — web standards
-# ---------------------------------------------------------------------------
-
-[provider.webstandard]
-location = "inline"
-type     = "domain"
-enabled  = true
-
-[[provider.webstandard.category]]
-name    = "Semantic Web Standards"
-tier    = 99
-mapping = ["infrastructure"]
-source  = [
-  "schema.org",
-  "schema.googleapis.com",
-  "w3.org",
-  "w3c.org",
-  "purl.org",
-  "xmlns.com",
-  "rdf.data-vocabulary.org",
-  "ogp.me",
-  "dublincore.org",
-  "json-ld.org",
-]
-
-[[provider.webstandard.category]]
-name    = "Web Standards Bodies"
-tier    = 99
-mapping = ["infrastructure"]
-source  = [
-  "iana.org",
-  "mozilla.org",
-  "whatwg.org",
-]
-
-# ---------------------------------------------------------------------------
-# Inline Domain Provider — loopback hostnames (tier 99)
-# ---------------------------------------------------------------------------
-
-[provider.loopback]
-location = "inline"
-type     = "domain"
-enabled  = true
-
-[[provider.loopback.category]]
-name    = "Loopback hostnames"
-tier    = 99
-mapping = ["local"]
-source  = [
-  "localhost",
-  "localhost.localdomain",
-  "ip6-localhost",
-  "ip6-loopback",
-]
-
-# ---------------------------------------------------------------------------
-# Local Provider — filesystem lists
+# Local Provider — example filesystem lists
 # ---------------------------------------------------------------------------
 
 [provider.fail2ban]
-name     = "Example IP list"
 location = "local"
 type     = "ip"
 enabled  = false
 
 [[provider.fail2ban.category]]
+name    = "local"
 mapping = ["suspicious"]
 source  = ["./fail2ban.txt"]
 
-# --------------------
-# System hosts file — enable one category for your OS.
-
-[provider.system-hosts]
-name     = "hosts"
-location = "local"
-type     = "domain"
-enabled  = false
-
-[[provider.system-hosts.category]]
-name    = "unix"
-tier    = 99
-mapping = ["local"]
-source  = ["/etc/hosts"]
-
-[[provider.system-hosts.category]]
-name    = "windows"
-tier    = 99
-enabled = false
-mapping = ["local"]
-source  = ["C:\\\\Windows\\\\System32\\\\drivers\\\\etc\\\\hosts"]
-
-# --------------------
-
-# Curlie — largest human-edited web directory: https://curlie.org/download
-# Download and extract the tar.gz, use rdf-*-c.tsv files (URL as first column).
-
-[provider.curlie]
-location = "local"
-type     = "domain"
-enabled  = false
-subdomain_match = false
-
-[[provider.curlie.category]]
-name    = "all"
-tier    = 8
-mapping = ["social"]
-source  = ["./provider.d/rdf-*-c.tsv"]
-
-# --------------------
-
-# Tranco Top 1M — https://tranco-list.eu/latest_list
-# find actual download link: `curl -s https://tranco-list.eu/api/lists/date/latest | python -m json.tool`
-# Strip rank column first: sed 's/^[0-9]*,//' top-1m.csv > top-1m.txt
-
-[provider.tranco]
-name     = "Tranco"
-location = "local"
-type     = "domain"
-enabled  = false
-subdomain_match = false
-
-[[provider.tranco.category]]
-name    = "Top 1M"
-tier    = 9
-mapping = ["social"]
-source  = ["./provider.d/top-1m.txt"]
-
 # ---------------------------------------------------------------------------
 
-# Blocklist OISD (https://oisd.nl/) — ABP Filter Format not yet supported
-{_OISD_DOWNLOAD}
+# OISD Blacklist (https://oisd.nl) — in ABP Filter Format
 
 [provider.oisd]
-location = "local"
+location = "remote"
 type     = "domain"
 enabled  = false
 
 [[provider.oisd.category]]
 name    = "big"
-tier    = 3
 mapping = ["ads"]
-source  = ["./big.oisd.nl.txt"]
+enabled  = true
+source  = ["https://big.oisd.nl"]
+
+[[provider.oisd.category]]
+name    = "nsfw"
+mapping = ["social"]
+enabled  = false
+source  = ["https://nsfw.oisd.nl"]
 
 # ---------------------------------------------------------------------------
 
@@ -589,7 +387,7 @@ source  = ["https://raw.githubusercontent.com/hagezi/dns-blocklists/main/domains
 
 # ---------------------------------------------------------------------------
 
-# Majestic Million
+# Majestic Million - Top 1 million
 {_MAJESTIC_DOWNLOAD}
 # Powershell: 
 #   Invoke-WebRequest -Uri "https://downloads.majestic.com/majestic_million.csv" -OutFile "$env:TEMP\\majestic.csv"
@@ -608,6 +406,42 @@ source  = ["./majestic_million.csv"]
 
 # ---------------------------------------------------------------------------
 
+# Curlie — largest human-edited web directory: https://curlie.org/download
+# Download and extract the tar.gz, use rdf-*-c.tsv files (URL as first column).
+
+[provider.curlie]
+location = "local"
+type     = "domain"
+enabled  = false
+subdomain_match = false
+
+[[provider.curlie.category]]
+name    = "all"
+tier    = 8
+mapping = ["social"]
+source  = ["./provider.d/rdf-*-c.tsv"]
+
+# ---------------------------------------------------------------------------
+
+# Tranco Top 1M — https://tranco-list.eu/latest_list
+# find actual download link: `curl -s https://tranco-list.eu/api/lists/date/latest | python -m json.tool`
+# Strip rank column first: sed -i 's/^[0-9]*,//' top-1m.csv
+
+[provider.tranco]
+name     = "Tranco"
+location = "local"
+type     = "domain"
+enabled  = false
+subdomain_match = false
+
+[[provider.tranco.category]]
+name    = "Top 1M"
+tier    = 9
+mapping = ["social"]
+source  = ["./top-1m.csv"]
+
+# ---------------------------------------------------------------------------
+
 # OpenPhish - Relevant Phishing Intelligence.
 # free limited use under following Terms of Use: https://openphish.com/terms.html
 
@@ -621,11 +455,12 @@ name    = "Limited"
 mapping = ["malware"]
 source  = ["https://raw.githubusercontent.com/openphish/public_feed/refs/heads/main/feed.txt"]
 
-
-
 # ---------------------------------------------------------------------------
-# Remote Provider — downloaded on --build-cache
-# ---------------------------------------------------------------------------
+
+# IP Fire - https://www.ipfire.org/
+# further categories: dating, dns-over-https, gambling, piracy, porn, smart-tv, social, violence
+# see https://dbl.ipfire.org/lists/ for URLs
+
 
 [provider.ipfire]
 name     = "IPFire"
@@ -652,10 +487,7 @@ tier    = 9
 mapping = ["ads"]
 source  = ["https://dbl.ipfire.org/lists/ads/domains.txt"]
 
-# further categories: dating, dns-over-https, gambling, piracy, porn, smart-tv, social, violence
-# see https://dbl.ipfire.org/lists/ for URLs
-
-# --------------------
+# ---------------------------------------------------------------------------
 
 # StevenBlack hosts — used by Pi-hole and many other blockers.
 # Set sinkhole to your Pi-hole IP if using dns provider below.
@@ -671,36 +503,27 @@ mapping = ["ads"]
 source  = ["https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"]
 
 # ---------------------------------------------------------------------------
-# GeoIP Provider (MaxMind GeoLite2)
-# Download: https://dev.maxmind.com/geoip/geolite2-free-geolocation-data
-# ---------------------------------------------------------------------------
-
-[provider.maxmind]
-location = "local"
-type     = "ip"
-enabled  = false
-
-[[provider.maxmind.category]]
-name    = "Country"
-mapping = ["geoip"]
-source  = ["./GeoLite2-Country_*.tar.gz"]
-
-[[provider.maxmind.category]]
-name    = "ASN"
-enabled = false
-mapping = ["geoip"]
-source  = ["./GeoLite2-ASN_*.tar.gz"]
-
-[[provider.maxmind.category]]
-name    = "City"
-enabled = false
-mapping = ["geoip"]
-source  = ["./GeoLite2-City_*.tar.gz"]
-
-# ---------------------------------------------------------------------------
-# DNS Provider
+# DNS Provider - see also `dns-resolve-filter` to pitch DNS queries
 # source = resolver IPs per category, sinkhole = block page IPs
 # ---------------------------------------------------------------------------
+
+# Pi-hole — set source to your Pi-hole IP, sinkhole to its block page IP (usually 0.0.0.0).
+# The StevenBlack remote list above covers the same domains as the default Pi-hole blocklist.
+
+[provider.pihole]
+location = "dns"
+type     = "domain"
+enabled  = false
+
+[[provider.pihole.category]]
+name     = "Pi-hole local"
+mapping  = ["ads"]
+source   = ["192.168.1.1"]          # replace with your Pi-hole IP
+sinkhole = ["0.0.0.0", "::", "::ffff:0.0.0.0"]
+
+# ---------------------------------------------------------------------------
+
+# OpenDNS https://www.opendns.com/ is the base of Cisco's Umbrella service
 
 [provider.opendns]
 name     = "OpenDNS"
@@ -732,21 +555,183 @@ mapping  = ["suspicious"]
 source   = ["208.67.222.222", "208.67.220.220", "2620:119:35::35", "2620:119:53::53"]
 sinkhole = ["146.112.61.110", "::ffff:146.112.61.110"]
 
-# --------------------
 
-# Pi-hole — set source to your Pi-hole IP, sinkhole to its block page IP (usually 0.0.0.0).
-# The StevenBlack remote list above covers the same domains as the default Pi-hole blocklist.
+# ---------------------------------------------------------------------------
+# GeoIP Provider (MaxMind GeoLite2)
+# Download: https://dev.maxmind.com/geoip/geolite2-free-geolocation-data
+# ---------------------------------------------------------------------------
 
-[provider.pihole]
-location = "dns"
+[provider.maxmind]
+location = "local"
+type     = "ip"
+enabled  = false
+
+[[provider.maxmind.category]]
+name    = "Country"
+mapping = ["geoip"]
+source  = ["./GeoLite2-Country_*.tar.gz"]
+
+[[provider.maxmind.category]]
+name    = "ASN"
+enabled = false
+mapping = ["geoip"]
+source  = ["./GeoLite2-ASN_*.tar.gz"]
+
+[[provider.maxmind.category]]
+name    = "City"
+enabled = false
+mapping = ["geoip"]
+source  = ["./GeoLite2-City_*.tar.gz"]
+
+# ---------------------------------------------------------------------------
+
+# System hosts file — you might want to enable category for your OS.
+
+[provider.system-hosts]
+name     = "hosts"
+location = "local"
 type     = "domain"
 enabled  = false
 
-[[provider.pihole.category]]
-name     = "Pi-hole local"
-mapping  = ["ads"]
-source   = ["192.168.1.1"]          # replace with your Pi-hole IP
-sinkhole = ["0.0.0.0", "::", "::ffff:0.0.0.0"]
+[[provider.system-hosts.category]]
+name    = "unix"
+tier    = 99
+mapping = ["local"]
+source  = ["/etc/hosts"]
+
+[[provider.system-hosts.category]]
+name    = "windows"
+tier    = 99
+enabled = false
+mapping = ["local"]
+source  = ["C:\\\\Windows\\\\System32\\\\drivers\\\\etc\\\\hosts"]
+
+# ---------------------------------------------------------------------------
+# S T A N D A R D S - normally you do not need to configure below
+# ---------------------------------------------------------------------------
+
+[provider.ip]
+location = "inline"
+type     = "ip"
+enabled  = true
+
+[[provider.ip.category]]
+name    = "rfc1918"
+mapping = ["local"]
+source  = [
+  "10.0.0.0/8",
+  "172.16.0.0/12",
+  "192.168.0.0/16",
+]
+
+[[provider.ip.category]]
+name    = "loopback"
+mapping = ["local"]
+source  = [
+  "127.0.0.0/8",
+  "::1/128",
+]
+
+[[provider.ip.category]]
+name    = "link-local"
+tier    = 99
+mapping = ["infrastructure"]
+source  = [
+  "169.254.0.0/16",
+  "fe80::/10",
+]
+
+[[provider.ip.category]]
+name    = "multicast"
+tier    = 99
+mapping = ["infrastructure"]
+source  = [
+  "224.0.0.0/4",
+  "ff00::/8",
+]
+
+[[provider.ip.category]]
+name    = "broadcast"
+tier    = 99
+mapping = ["infrastructure"]
+source  = [
+  "255.255.255.255/32",
+]
+
+[[provider.ip.category]]
+name    = "cgNAT"
+tier    = 99
+mapping = ["infrastructure"]
+source  = [
+  "100.64.0.0/10",
+]
+
+[[provider.ip.category]]
+name    = "pubDNS"
+tier    = 99
+mapping = ["infrastructure"]
+source  = [
+  "1.1.1.1",          # Cloudflare
+  "8.8.8.8",          # Google
+  "9.9.9.9",          # Quad9
+  "208.67.222.222",   # OpenDNS
+]
+
+# ---------------------------------------------------------------------------
+# Inline Domain Provider 'webstandard' - S T A N D A R D S
+# ---------------------------------------------------------------------------
+
+[provider.web]
+location = "inline"
+type     = "domain"
+enabled  = true
+
+[[provider.web.category]]
+name    = "semantic"
+tier    = 99
+mapping = ["infrastructure"]
+source  = [
+  "schema.org",
+  "schema.googleapis.com",
+  "w3.org",
+  "w3c.org",
+  "purl.org",
+  "xmlns.com",
+  "rdf.data-vocabulary.org",
+  "ogp.me",
+  "dublincore.org",
+  "json-ld.org",
+]
+
+[[provider.web.category]]
+name    = "bodies"
+tier    = 99
+mapping = ["infrastructure"]
+source  = [
+  "iana.org",
+  "mozilla.org",
+  "whatwg.org",
+]
+
+# ---------------------------------------------------------------------------
+# Inline Domain Provider — loopback hostnames
+# ---------------------------------------------------------------------------
+
+[provider.loopback]
+location = "inline"
+type     = "domain"
+enabled  = true
+
+[[provider.loopback.category]]
+name    = "Loopback hostnames"
+tier    = 99
+mapping = ["local"]
+source  = [
+  "localhost",
+  "localhost.localdomain",
+  "ip6-localhost",
+  "ip6-loopback",
+]
 
 """
 
