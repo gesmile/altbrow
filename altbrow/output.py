@@ -45,6 +45,70 @@ def _occ_str(occ: dict) -> str:
   return "/".join(k.upper() for k in occ) if occ else ""
 
 
+def _connection_summary(transport: dict) -> str:
+  """Build a one-line connection string for the summary section.
+
+  Args:
+    transport: transport dict from extracted result.
+
+  Returns:
+    Human-readable connection string, e.g.
+    'HTTPS · HTTP/1.1 · TLS 1.3 (TLS_AES_256_GCM_SHA384)'
+  """
+  http = transport.get("http", {})
+  tls  = transport.get("tls") or {}
+  ver  = http.get("version") or "?"
+  n_redir = len(http.get("redirects", []))
+
+  n_headers = len(http.get("headers", {}))
+
+  annot_parts = []
+  if n_headers:
+    annot_parts.append(f"h:{n_headers}")
+  if n_redir:
+    annot_parts.append(f"r:{n_redir}")
+  annot   = f" ({', '.join(annot_parts)})" if annot_parts else ""
+  ver_str = f"{ver}{annot}"
+
+  if tls:
+    proto  = tls.get("protocol", "")
+    cipher = tls.get("cipher", "")
+    pki    = tls.get("pki", "")
+    s = f"HTTPS · {ver_str} · {proto} ({cipher})"
+    if pki and pki != "valid":
+      s += f" [pki: {pki}]"
+  else:
+    s = f"HTTP · {ver_str}"
+
+  return s
+
+
+def _render_transport(transport: dict, verbosity: int = 1) -> None:
+  """Print the Transport section (verbosity >= 1) with redirect chain and optional headers.
+
+  Args:
+    transport: transport dict from extracted result.
+    verbosity: 1 = protocol + redirects, 2 = additionally HTTP response headers.
+  """
+  http      = transport.get("http", {})
+  redirects = http.get("redirects", [])
+
+  print("\n=== Transport ===")
+  print(f"  {_connection_summary(transport)}")
+  if redirects:
+    for r in redirects:
+      print(f"    {r['status']}  {r['url']}")
+  elif verbosity >= 2:
+    print("  (no redirects)")
+
+  if verbosity >= 2:
+    headers = http.get("headers", {})
+    if headers:
+      print("  HTTP Response Headers")
+      for k, v in headers.items():
+        print(f"    {k}: {v}")
+
+
 def _render_text(extracted: dict, verbosity: int, providers: dict | None = None) -> None:
   """Render human-readable text output to STDOUT.
 
@@ -54,6 +118,7 @@ def _render_text(extracted: dict, verbosity: int, providers: dict | None = None)
     providers: config["provider"] for human-readable label lookup.
     geo_readers: Open GeoReaders for live GeoIP lookup, or None.
   """
+  transport  = extracted.get("transport", {})
   signals    = extracted.get("signals", {})
   structured = extracted.get("data", {})
 
@@ -94,6 +159,7 @@ def _render_text(extracted: dict, verbosity: int, providers: dict | None = None)
   )
 
   print("\n=== Summary ===")
+  print(f"Connection       : {_connection_summary(transport)}")
   geo_part = f" ({geo_summary})" if geo_summary else ""
   print(f"External domains : {len(domains)}" + (f" ({cat_summary})" if cat_summary else "") + geo_part)
   print(f"External IPs     : {len(ips)}" + (f" ({ip_cat_summary})" if ip_cat_summary else ""))
@@ -103,6 +169,8 @@ def _render_text(extracted: dict, verbosity: int, providers: dict | None = None)
 
   if verbosity < 1:
     return
+
+  _render_transport(transport, verbosity)
 
   print("\n=== External Domains ===")
   from .geoip import format_geo as _fmt_geo
@@ -122,10 +190,9 @@ def _render_text(extracted: dict, verbosity: int, providers: dict | None = None)
         f"{d['value']:<40} {winning:<15} {geo_col}"
       )
 
-  print("\n=== External IPs ===")
-  if not ips:
-    print("  (none)")
-  else:
+  if ips or verbosity >= 2:
+    print("\n=== External IPs ===")
+  if ips:
     for ip in ips:
       winning = ip.get("cat", "unknown")
       occ_col = _occ_str(ip.get("occ", {}))
@@ -156,18 +223,12 @@ def _render_text(extracted: dict, verbosity: int, providers: dict | None = None)
     print(f"  {c['name']:<30} {', '.join(flags)}")
 
   print("\n=== JSON-LD ===")
-  if not jsonld:
-    print("  (none)")
-  else:
-    for i, block in enumerate(jsonld, 1):
-      print(f"  Block {i}: {block.get('@type', '?')}")
+  for i, block in enumerate(jsonld, 1):
+    print(f"  Block {i}: {block.get('@type', '?')}")
 
   print("\n=== Microdata ===")
-  if not microdata:
-    print("  (none)")
-  else:
-    for i, block in enumerate(microdata, 1):
-      print(f"  Block {i}: {block.get('type', '?')}")
+  for i, block in enumerate(microdata, 1):
+    print(f"  Block {i}: {block.get('type', '?')}")
 
 
 def render_output(

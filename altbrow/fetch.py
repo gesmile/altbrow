@@ -35,6 +35,65 @@ def _normalize_url(url: str) -> str:
   return parsed._replace(path=path_encoded).geturl()
 
 
+def _build_transport(response: "requests.Response", check_cert: bool = True) -> dict:
+  """Build transport metadata from an active requests.Response.
+
+  Must be called before response.text is accessed to ensure the
+  underlying SSL socket is still reachable for cipher inspection.
+
+  Args:
+    response: Active response object (body not yet consumed).
+    check_cert: Whether TLS certificate was verified (from client profile).
+
+  Returns:
+    Dict with keys:
+      http.version    - HTTP version string or None
+      http.redirects  - list of {"url", "status"} dicts
+      tls             - dict with protocol/cipher/pki, or None for plain HTTP
+  """
+  raw = response.raw
+
+  version_code = getattr(raw, "version", None)
+  http_version = {10: "HTTP/1.0", 11: "HTTP/1.1", 20: "HTTP/2"}.get(version_code)
+
+  redirects = [
+    {"url": r.url, "status": r.status_code}
+    for r in response.history
+  ]
+
+  tls: dict | None = None
+  try:
+    sock = None
+    # urllib3 v1/v2: connection still checked out
+    conn = getattr(raw, "_connection", None) or getattr(raw, "connection", None)
+    if conn is not None:
+      sock = getattr(conn, "sock", None)
+    # urllib3 v2: connection released to pool but _sock_shutdown keeps a reference
+    if sock is None:
+      shutdown_ref = getattr(raw, "_sock_shutdown", None)
+      if shutdown_ref is not None:
+        sock = getattr(shutdown_ref, "__self__", None)
+    if sock is not None and hasattr(sock, "cipher"):
+      info = sock.cipher()
+      if info:
+        tls = {
+          "protocol": info[1].replace("TLSv", "TLS "),
+          "cipher":   info[0],
+          "pki":      "valid" if check_cert else "unknown",
+        }
+  except Exception as exc:
+    logger.debug("_build_transport TLS error: %s", exc)
+
+  return {
+    "http": {
+      "version":   http_version,
+      "headers":   dict(response.headers),
+      "redirects": redirects,
+    },
+    "tls": tls,
+  }
+
+
 def fetch_url(url: str, client_profile: dict) -> dict:
   """Fetch a URL using the given client profile settings.
 
@@ -59,6 +118,7 @@ def fetch_url(url: str, client_profile: dict) -> dict:
       encoding     - response encoding
       html         - response body as string
       cookies      - CookieJar
+      transport    - connection layer metadata (HTTP version, redirects, TLS)
 
   Raises:
     requests.exceptions.MissingSchema: Invalid URL.
@@ -80,20 +140,14 @@ def fetch_url(url: str, client_profile: dict) -> dict:
     logger.debug("URL normalized: %s -> %s", url, normalized_url)
 
   try:
-    if use_session:
-      session = requests.Session()
-      if headers:
-        session.headers.update(headers)
-      response = session.get(normalized_url, timeout=timeout, verify=check_cert)
-      cookies = session.cookies
-    else:
-      response = requests.get(
-        normalized_url,
-        headers=headers or None,
-        timeout=timeout,
-        verify=check_cert,
-      )
-      cookies = response.cookies
+    # Always use an explicit Session so the underlying SSL socket stays
+    # accessible after the request (requests.get() closes its internal
+    # session before returning, which clears _connection and kills cipher()).
+    session = requests.Session()
+    if headers:
+      session.headers.update(headers)
+    response = session.get(normalized_url, timeout=timeout, verify=check_cert)
+    cookies  = session.cookies if use_session else response.cookies
 
     response.raise_for_status()
 
@@ -103,14 +157,18 @@ def fetch_url(url: str, client_profile: dict) -> dict:
       response.status_code
     )
 
+    transport = _build_transport(response, check_cert)
+    html      = response.text
+
     return {
       "url":         url,           # original as given by user
       "final_url":   response.url,
       "status_code": response.status_code,
       "headers":     dict(response.headers),
       "encoding":    response.encoding,
-      "html":        response.text,
+      "html":        html,
       "cookies":     cookies,
+      "transport":   transport,
     }
 
   except requests.exceptions.MissingSchema:

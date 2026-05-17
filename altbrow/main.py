@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
-from altbrow import __version__
+from altbrow import __version__, APP_NAME
 from .fetch import fetch_url
 from .extract import extract_data
 from .logging_config import setup_logging
@@ -35,6 +35,7 @@ def main() -> int:
       3 - config/cache error
       4 - network/analysis error
   """
+
   parser = argparse.ArgumentParser()
 
   parser.add_argument("url", nargs="?", help="URL to analyze")
@@ -42,7 +43,7 @@ def main() -> int:
   parser.add_argument(
     "-V", "--version",
     action="version",
-    version=f"Altbrow v{__version__}"
+    version=f"{APP_NAME} v{__version__}"
   )
 
   parser.add_argument(

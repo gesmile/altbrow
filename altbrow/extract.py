@@ -66,8 +66,9 @@ def extract_data(fetch_result: dict, cache_path: Path, config: dict | None = Non
 
   Returns:
     Dict with keys:
-      data - JSON-LD and Microdata blocks
-      signals         - domains, ips, cookies
+      transport - connection layer metadata (passed through from fetch_url)
+      data      - JSON-LD and Microdata blocks
+      signals   - domains, ips, cookies
   """
   html        = fetch_result["html"]
   orig_url    = fetch_result["url"]        # original URL before redirects
@@ -200,11 +201,12 @@ def extract_data(fetch_result: dict, cache_path: Path, config: dict | None = Non
       logger.warning("Cookie parsing failed: %s", exc)
 
   return {
+    "transport": fetch_result.get("transport", {}),
     "data": structured,
     "signals": {
       "domains": classified_domains,
       "ips":     classified_ips,
-      "cookies":          classified_cookies,
+      "cookies": classified_cookies,
     },
   }
 
