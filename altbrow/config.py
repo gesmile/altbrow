@@ -1,5 +1,5 @@
 from pathlib import Path
-from altbrow import __version__
+from altbrow import __version__, APP_NAME
 from altbrow.utils import format_size
 from datetime import date
 import tomllib
@@ -944,7 +944,7 @@ def validate_altbrow_config(
 
   # --- description sentence ---
   lines = [
-    f"Altbrow Version v{__version__} reads with config Version {config_version} from {config_date}"
+    f"{APP_NAME} Version v{__version__} reads with config Version {config_version} from {config_date}"
     + (f",\nread from {config_path.resolve()}." if config_path else "."),
     f"It operates {activity} {consented} and counts domains, cookies, html, jsonld and microdata.",
     f"Default structured output format is {output_text}.",
