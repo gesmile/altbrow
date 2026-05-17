@@ -1,12 +1,12 @@
-<p align="center" >
-  <img src="assets/logo-sign.svg" width="90" alt="Altbrow Sign">
-  <img src="assets/logo.svg" width="90" alt="Altbrow Logo">
-</p>
+<img src="assets/logo.svg" width="90" alt="Altbrow Logo" align="left" >
 
 # Altbrow
 
-Alternative crawler-like browser for a deep look into a website's semantic structure and external dependencies.
-Includes a provider system for domain and IP classification via inline lists, local files, remote feeds, and DNS resolvers.
+Alternative crawler-like browser for a deep look into a website's semantic structure and external dependencies.   
+Includes a provider system for domain and IP classification via inline lists, local files, remote feeds, and DNS resolvers   
+— with structured JSON output.
+
+Pipe it through **jq** to surface exactly what you're looking for.
 
 > Alpha version — built with AI assistance.
 
@@ -111,7 +111,7 @@ See [docs/provider.md](docs/docs/provider.md) for the full provider schema, all 
 | `local`         | RFC1918, localhost, loopback, your own domains               |
 | `infrastructure`| Web standards, semantic namespaces, DNS resolvers            |
 | `unknown`       | Default if no provider matched                               |
-| `geoip`         | Used for location service, not a regular category            |
+
 
 ## Exit Codes
 
@@ -120,27 +120,22 @@ See [docs/exitcodes.md](docs/docs/exitcodes.md) for the full reference including
 ## Example
 
 ```bash
-altbrow -v https://example.com
-```
+altbrow -v example.com
 
-```
 === Summary ===
-External domains : 25 (ads: 2, infrastructure: 5, local: 12, malware: 1, social: 3, tracking: 1, unknown: 1) (US: 20, DE: 3, AT: 1, IE: 1)
+Connection       : HTTPS · HTTP/1.1 (h:11) · TLS 1.3 (TLS_AES_256_GCM_SHA384)
+External domains : 2 (ads: 1, social: 1) (US: 2)
 External IPs     : 0
 Cookies          : 0
 JSON-LD blocks   : 0
-Microdata blocks : 2
+Microdata blocks : 0
+
+=== Transport ===
+  HTTPS · HTTP/1.1 (h:11) · TLS 1.3 (TLS_AES_256_GCM_SHA384)
 
 === External Domains ===
-  FIRST_PARTY  TARGET     example.com                              local           [US AS15133 MCI Communications]
-  EXTERNAL     LINK       creativecommons.org                      social          [US AS13335 Cloudflare, Inc.]
-  EXTERNAL     LINK       developer.mozilla.org                    local           [DE/Munich AS54113 Fastly, Inc.]
-  EXTERNAL     LINK       developers.google.com                    local           [US AS15169 Google LLC]
-  EXTERNAL     LINK       en.wikipedia.org                         local           [US AS14907 Wikimedia Foundation Inc.]
-  EXTERNAL     LINK       foundation.wikimedia.org                 ads             [US AS14907 Wikimedia Foundation Inc.]
-  EXTERNAL     LINK       github.com                               local           [DE/Frankfurt am Main AS36459 GitHub, Inc.]
-  EXTERNAL     LINK       jena.apache.org                          local           [US AS54113 Fastly, Inc.]
-...
+  FIRST_PARTY  TARGET     example.com                              ads             [US AS13335 Cloudflare, Inc.]
+  EXTERNAL     LINK       iana.org                                 social          [US AS40528 ICANN]
 ```
 
 ### UTF8 enabled
