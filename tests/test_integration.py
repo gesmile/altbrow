@@ -117,6 +117,28 @@ def test_has_signals(extracted_fixture, request):
 @pytest.mark.parametrize("extracted_fixture", [
   "basic_localhost", "basic_127", "dns_localhost", "dns_127"
 ])
+def test_transport_present(extracted_fixture, request):
+  """transport key must be present with http sub-dict."""
+  extracted = request.getfixturevalue(extracted_fixture)
+  assert "transport" in extracted
+  transport = extracted["transport"]
+  assert "http" in transport
+  assert isinstance(transport["http"]["version"], (str, type(None)))
+  assert isinstance(transport["http"]["redirects"], list)
+
+
+@pytest.mark.parametrize("extracted_fixture", [
+  "basic_localhost", "basic_127", "dns_localhost", "dns_127"
+])
+def test_transport_no_tls_for_http(extracted_fixture, request):
+  """Mock server is HTTP only — tls must be None."""
+  extracted = request.getfixturevalue(extracted_fixture)
+  assert extracted["transport"]["tls"] is None
+
+
+@pytest.mark.parametrize("extracted_fixture", [
+  "basic_localhost", "basic_127", "dns_localhost", "dns_127"
+])
 def test_domains_present(extracted_fixture, request):
   extracted = request.getfixturevalue(extracted_fixture)
   assert len(extracted["signals"]["domains"]) > 0
