@@ -46,12 +46,14 @@ altbrow --validate-config
 vi ~/.altbrow/altbrow.toml
 vi ~/.altbrow/provider.toml
 
-# rebuild provider cache after config changes
+# rebuild provider cache after provider.toml changes
 altbrow --build-cache
 
 # analyse a URL
 altbrow <URL>
 altbrow -vv <URL>
+
+# bypass invalid certs or bot protection
 altbrow --no-cert-check --client-profile browser <URL>
 ```
 
