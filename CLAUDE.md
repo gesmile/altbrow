@@ -256,3 +256,7 @@ See [docs/exitcodes.md](docs/docs/exitcodes.md) for the full reference.
 - DNS provider integration test (mock DNS server)
 - Pi-hole source IP visibility in DNS queries (pending investigation)
 - `--client-profile consented` not yet implemented
+- **Bug: categories[].tier** contains match index instead of configured provider tier
+  (sequential 0,1,2 per domain — not the tier from provider.toml);
+  check output.py or classify_domain.py
+
