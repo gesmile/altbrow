@@ -76,7 +76,7 @@ URL
 | `extract.py` | HTML tag extraction, extruct structured-data parsing, cookie extraction |
 | `classify_cookies.py` | `classify_cookies()` — parses a raw `Set-Cookie` header, flags `third_party` and `cross_site` |
 | `classify_domain.py` | Domain/IP relation + category classification against cache |
-| `domain_utils.py` | `get_registrable_domain()` — thin tldextract wrapper used across modules |
+| `domain_utils.py` | `get_apex_domain()` — thin tldextract wrapper used across modules |
 | `fetch_remote.py` | `parse_entries()` — shared parser for local and remote provider lists |
 | `cache.py` | SQLite provider cache: build, schema, `lookup_domain()`, `lookup_ip()` |
 | `dns_lookup.py` | Live parallel DNS queries via ThreadPoolExecutor, sinkhole detection |
@@ -105,7 +105,7 @@ MERGE_KEYS = {"provider", "dns-resolve-filter", "resolve"}
 
 Providers classify domains and IPs into categories (`ads`, `analytics`, `cdn`, `infrastructure`, `local`, `malware`, `social`, `suspicious`, `telemetry`, `tracking`, `unknown`, plus automatic `FIRST_PARTY`/`SUBDOMAIN`/`PEER`/`EXTERNAL` relations). `geoip` is a valid mapping value but marks a provider as a GeoIP enrichment source, not a classification category.
 
-Provider locations: `inline`, `local`, `remote`, `dns`  
+Provider locations: `inline`, `local`, `remote`, `dns`
 Provider types: `domain`, `ip` (GeoIP providers are identified by `mapping = ["geoip"]`, not by a separate type)
 
 **Tier-based winner selection**: multiple providers can match the same domain/IP; the entry with the lowest `tier` integer wins. Inline/local defaults to tier 1; remote/dns defaults to tier 2.
@@ -115,24 +115,23 @@ Provider types: `domain`, `ip` (GeoIP providers are identified by `mapping = ["g
 Two orthogonal classification axes on every signal:
 
 - **Occurrence** (`TARGET`, `ASSET`, `LINK`, `MIXED`) — *where* the domain was found in the HTML
-- **Relation** (`FIRST_PARTY`, `SUBDOMAIN`, `PEER`, `EXTERNAL`) — *structural position* relative to the analysed URL's registrable domain (via tldextract)
+- **Relation** (`FIRST_PARTY`, `SUBDOMAIN`, `PEER`, `EXTERNAL`) — *structural position* relative to the analysed URL's apex domain (via tldextract)
 
 ### Cache schema
 
-Two tables: `provider_categories` (~30 rows, one per provider+category combination) and `entries` (one row per domain/IP, integer FK to `provider_categories`). Indexed on `value` and `registrable_domain` (partial index, NULL for IPs/CIDRs). `meta` table stores `built_at` timestamp and `altbrow_version`. Multiple rows per domain are allowed (one per category match).
+Two tables: `provider_categories` (~30 rows, one per provider+category combination) and `entries` (one row per domain/IP, integer FK to `provider_categories`). Indexed on `value` and `apex` (partial index, NULL for IPs/CIDRs). `meta` table stores `built_at` timestamp and `altbrow_version`. Multiple rows per domain are allowed (one per category match).
 
 ### Result data structure
 
 Planned top-level shape of the analysis result (JSON/YAML export and internal `extracted` dict):
 
 ```
-
 transport                     — connection layer (TLS, HTTP, redirects)
   tls                         — Peer information (target webserver)
     protocol                  — TLS 1.2 | TLS 1.3 (Protocol Version)
     cipher                    — e.g. TLS_AES_256_GCM_SHA384
     pki                       — overall chain status: valid | revoked | expired | untrusted | unknown
-    certs[]                   — certificate chain (planned; skipped with --no-cert-check)
+    certs[]                   — certificate chain (planned)
       subject
       issuer
       until                   — e.g. NotAfter: `Jun 25 15:32:05 2026 GMT`
@@ -142,40 +141,40 @@ transport                     — connection layer (TLS, HTTP, redirects)
   http
     version                   — HTTP/1.1 | HTTP/2 | HTTP/3
     headers                   — response headers (as dict)
-    redirects[]               — redirect chain before final_url
+    redirects[]               — redirect chain before final URL
       url                     — new URL
       status                  — HTTP status code
 
-signals                       — external dependency
+signals                       — external dependency signals
   domains[]
     value                     — hostname as seen in HTML
     apex                      — registrable domain (tldextract)
-    rel                       — relation:   FIRST_PARTY | SUBDOMAIN | PEER | EXTERNAL
+    rel                       — FIRST_PARTY | SUBDOMAIN | PEER | EXTERNAL
     cat                       — winning category (tier-based)
     categories[]              — all matched categories
-      name                    — from provider.toml (former category_name)
-      category                — mapped altbrow 8 + 3 category
-      provider                — name from provider.toml
-      location                — inline, local, remote, dns (former provider_location)
-      tier                    — integer, 0 is winning
+      name                    — label from provider.toml
+      category                — altbrow category
+      provider                — provider name from provider.toml
+      location                — inline | local | remote | dns
+      tier                    — integer; 0 is highest priority
     occ                       — occurrence counts by context (dict, omitted keys = 0)
       target                  — analysed URL itself
-      asset                   — found in asset tag (img, script, link, iframe, …)
-      link                    — found in anchor <a href>
-      cookie                  — found in Set-Cookie Domain= attribute only
-    ip                        — resolved addresses (one entry per domain; multi-homing is ignored)
+      asset                   — img, script, link, iframe, …
+      link                    — anchor <a href>
+      cookie                  — Set-Cookie Domain= attribute
+    ip                        — first resolved address (multi-homing ignored)
       addr                    — IP address string
       geo
         country               — ISO 3166-1 alpha-2
         city
-        asn                   — ASN string (e.g. AS197540)
+        asn                   — e.g. AS197540
         org                   — organisation name
   ips[]                       — bare IPs found directly in HTML (not via domain resolution)
-    value                     — IP address string
-    cat                       — winning category
+    value
+    cat
     categories[]
-    occ                       — occurrence counts (same keys as domains[].occ)
-    geo                       — direct GeoIP lookup (no domain resolution step)
+    occ
+    geo
       country
       city
       asn
@@ -187,31 +186,38 @@ data                          — embedded structured data
   jsonld                      — JSON-LD
   rdfa                        — RDFa (planned)
 
-web
-  structure
-    head                      — <meta> tags: title, description, keywords, …
-    html
-      content[]               — sectioning elements: main, section, article,
-                                aside, header, nav, footer — one entry each
-        media[]               — images, video, audio, iframes inside this section
-        text
-          structure[]         — h1–h6, p, dl/dt/dd, ol/ul/li, dfn, figure/figcaption
-          special[]           — address, form, data, time
-          emphasis[]          — blockquote, pre, em, strong, small, mark, cite,
-                                code, q, abbr, kbd, samp, var, ins, del
-      scripts[]               — <script> elements (inline + external)
-      css[]                   — <link rel=stylesheet> + <style> elements
-  statistics
-    bytes                     — bytes of HTML response
-    media                     — number of referenced media elements
-    wc                        — word count of human visible text
-
+html                        — (planned soon)
+  head
+    title                   — <title> string
+    base                    — <base href> if present
+    meta[]                  — <meta name | property | http-equiv + content>
+    link[]                  — <link rel=...> (canonical, stylesheet, icon,
+                              preconnect, dns-prefetch, …)
+    script[]                — <script> elements in head (inline + external)
+    style[]                 — <style> inline CSS in head
+    noscript[]              — <noscript> fallback content
+  content[]                 — one entry per sectioning HTML5 element; body as
+                              implicit root if none present (HTML4 compatibility)
+    type                    — main | section | article | aside | header | nav | footer | body
+    media[]                 — images, video, audio, iframes inside this section
+    noscript[]              — <noscript> fallback content
+    text
+      structure[]           — h1–h6, p, dl/dt/dd, ol/ul/li, dfn, figure/figcaption
+      special[]             — address, form, data, time
+      emphasis[]            — blockquote, pre, em, strong, small, mark, cite,
+                              code, q, abbr, kbd, samp, var, ins, del
+  scripts[]                 — <script> elements in body (inline + external)
+  css[]                     — <link rel=stylesheet> + <style> in body
+  statistics                — (planned)
+    bytes                   — bytes of HTML response
+    media                   — total count of referenced media elements
+    wc                      — word count of human-visible text
 ```
 
 Notes:
-- `data.*` (Microdata / JSON-LD / RDFa) and `web.structure.html.content` are parallel views: structured-data vocabularies annotate the same content that `content[]` captures as raw HTML semantics.
-- `certs` is planned; implementation gated behind a future `--no-cert-check` flag.
-- `data.rdfa` is planned alongside the JSON-LD vs Microdata vs RDFa extraction milestone.
+- `data.*` (Microdata / JSON-LD / RDFa) and `web.structure.html.content` are parallel views
+- `transport.tls.certs` is planned; implementation gated behind `--no-cert-check`
+- `data.rdfa` is planned alongside the JSON-LD / Microdata / RDFa extraction milestone
 
 ## Key Decisions
 
@@ -219,6 +225,7 @@ Notes:
 - Cache placement derived inline — no separate discovery function
 - `geo` field included in `extracted` dict for JSON/YAML export
 - GeoIP uses `mapping` field with MMDB filenames (consistent with provider model)
+- Domain apex field named `apex` throughout (code, cache schema, JSON output)
 
 ## Coding Conventions
 
@@ -227,12 +234,6 @@ Notes:
 - **No silent renaming** of functions or variables without explicit instruction
 - **Docstrings**: on all functions
 - **Commits**: Conventional commits format (`feat:`, `fix:`, `chore:`, etc.)
-
-## CI/CD Pipeline
-
-- **Canonical branches**: `main`, `develop`, `release`
-- **CI jobs**: `build` → `validate` (ruff + pytest) → `integration` (mock HTTP server)
-- Integration tests use Python stdlib `urllib.request` for HTTP readiness checks
 
 ## Exit codes
 
@@ -249,110 +250,9 @@ See [docs/exitcodes.md](docs/docs/exitcodes.md) for the full reference.
 
 ## Open Items
 
-- **`_paths`/`_runtime` refactor**: consolidate `cache_path`/`config_path`/`geo_readers` into `config["_paths"]` and `config["_runtime"]` so all functions take only `config` — see `stack.md` for migration plan
+- **`_paths`/`_runtime` refactor**: consolidate `cache_path`/`config_path`/`geo_readers` into `config["_paths"]` and `config["_runtime"]` so all functions take only `config` — detailed plan in `stack.md`
 - mypy: 16 errors in 8 files (geoip, dns_lookup, extract, cache)
 - DNS sequential-with-fallback strategy within a provider category's source list (pending)
 - DNS provider integration test (mock DNS server)
+- Pi-hole source IP visibility in DNS queries (pending investigation)
 - `--client-profile consented` not yet implemented
-- **Exit code 5**: implement distinct HTTP 4xx/5xx handling in `main.py` (currently caught by code 4 catch-all)
-- **Category hardening**: `validate_provider_config()` does not prevent users from setting `mapping = ["unknown"]` or `mapping = ["geoip"]` — separate ticket
-- **Tier semantics**: config `tier` (sort priority) vs. output `tier` (sequential rank 0,1,2…) — `classify_domain.py` overwrites the stored value after sorting; consider renaming output field to `rank` to avoid confusion
-- **`SELF_REF`** occurrence type (or shorter name): domains found only in JSON-LD/Microdata with no HTML tag traffic — add to `docs/provider.md` relation categories once implemented
-- **`dns-resolve-filter` validate-config wording**: when the section is absent, `--validate-config` prints "N categories are validated by dns-resolve-filter" — misleading, because without a filter all non-DNS categories unconditionally trigger live DNS queries (no filtering at all). Should distinguish "no filter active → all queried" from "filter active → N categories matched"
-- **`_should_query_category` bug — `enabled-categories = []`**: `dns_lookup.py:49` uses `not enabled_cats` which treats `[]` (explicitly disabled) identically to `None` (key absent). The documented example "Disable all DNS verification: `enabled-categories = []` + `filter-mode = "and"`" is broken — for any domain with a cache hit, line 49 short-circuits with `return True` before the `filter_mode = "and"` branch (which would correctly return `False`). Fix: change `if not enabled_cats and max_tier is None` to `if enabled_cats is None and max_tier is None`.
-
----
-
-# Feature: Many-to-Many Domain-Provider Mapping (Nice to Have)
-
-## Problem
-
-Current schema stores one row per (domain, provider_category) combination.
-A domain present in 10 provider lists creates 10 rows with the same `value`
-and `registrable_domain`. This is redundant for high-frequency domains
-like `google.com`, `facebook.com` etc.
-
-## Proposed Schema
-
-```sql
-CREATE TABLE IF NOT EXISTS domains (
-  id                 INTEGER PRIMARY KEY,
-  value              TEXT NOT NULL,
-  registrable_domain TEXT,
-  is_cidr            INTEGER NOT NULL DEFAULT 0,
-  UNIQUE(value)
-);
-
-CREATE TABLE IF NOT EXISTS domain_providers (
-  domain_id       INTEGER NOT NULL REFERENCES domains(id),
-  provider_cat_id INTEGER NOT NULL REFERENCES provider_categories(id),
-  PRIMARY KEY (domain_id, provider_cat_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_domains_value
-  ON domains(value);
-
-CREATE INDEX IF NOT EXISTS idx_domains_registrable
-  ON domains(registrable_domain)
-  WHERE registrable_domain IS NOT NULL;
-```
-
-`provider_categories` table unchanged.
-
-## Build Strategy
-
-Two-phase build to avoid per-row SELECT during insert:
-
-**Phase 1** — bulk insert all domains (fast):
-```python
-con.executemany(
-  "INSERT OR IGNORE INTO domains (value, registrable_domain, is_cidr) VALUES (?,?,?)",
-  domain_rows
-)
-```
-
-**Phase 2** — resolve domain_id and insert relations:
-```python
-for value, provider_cat_id in relation_rows:
-    row = con.execute("SELECT id FROM domains WHERE value=?", (value,)).fetchone()
-    if row:
-        con.execute(
-          "INSERT OR IGNORE INTO domain_providers VALUES (?,?)",
-          (row[0], provider_cat_id)
-        )
-```
-
-Phase 2 is slower due to 5M+ individual lookups — consider batching
-with a temporary lookup dict built from Phase 1 results.
-
-## Lookup Query
-
-```sql
-SELECT pc.category, pc.provider, pc.location, pc.category_name, pc.tier
-FROM domains d
-JOIN domain_providers dp ON dp.domain_id = d.id
-JOIN provider_categories pc ON pc.id = dp.provider_cat_id
-WHERE d.value = ?
-  OR (d.registrable_domain = ? AND pc.subdomain_match = 1)
-```
-
-## Expected Benefit
-
-Meaningful only for domains appearing in many lists simultaneously.
-Estimated 10-20% of entries are cross-list duplicates → modest space saving.
-Index size on `value` and `registrable_domain` dominates total DB size
-regardless of schema — actual saving likely under 5%.
-
-## Trade-offs
-
-| Aspect | Current | Many-to-Many |
-|--------|---------|--------------|
-| Build speed | fast (bulk insert) | slower (two-phase) |
-| Query complexity | simple JOIN | additional JOIN |
-| Space saving | — | ~5-10% estimated |
-| Code complexity | low | medium |
-
-## Verdict
-
-Low priority. Implement only if DB size becomes a hard constraint
-after other optimisations (e.g. selective indexing, list curation).
