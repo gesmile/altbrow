@@ -52,23 +52,16 @@ altbrow --build-cache
 # analyse a URL
 altbrow <URL>
 altbrow -vv <URL>
-
 # bypass invalid certs or bot protection
 altbrow --no-cert-check --client-profile browser <URL>
 ```
 
-### JSON output with jq
+### Output formats
 
-```bash
-# category, country and occurrence per domain
-altbrow -f json <URL> | jq -c '.signals.domains[] | {domain: .value, cat, country: .ip.geo.country, occ}'
+Altbrow writes to stdout in three formats: human-readable text, JSON, and YAML.
 
-# see all provider hits per domain
-altbrow -f json <URL> | jq -c '.signals.domains[] | {domain: .value, cats: [.categories[] | "\(.provider):\(.name)"] | join(", ") } + .occ'
-
-# see unique categories per domain
-altbrow -f json <URL> | jq -c '.signals.domains[] | {domain: .value, cat, cats: [.categories[].category] | unique, occ: .occ}'
-```
+* See [Result Structure](docs/docs/result-structure.md) for the full JSON/YAML field reference and implementation status.
+* See [jq Examples](docs/docs/jq-examples.md) for filtering and processing recipes.
 
 ### CLI
 
@@ -96,28 +89,27 @@ Cache and GeoIP DB files are always placed next to the active config file.
 
 Classifies domains and IPs using configurable providers: inline lists, local files, remote blocklists, DNS resolvers, and GeoIP databases.
 
-See [docs/provider.md](docs/docs/provider.md) for the full provider schema, all file formats (plain list, hosts file, CSV/TSV, ABP filter, browser bookmarks), and configuration reference.
+See [Provider System](docs/docs/provider.md) for the full provider schema, all file formats (plain list, hosts file, CSV/TSV, ABP filter, browser bookmarks), and configuration reference.
 
 ### Categories
 
-| Category        | Description                                                  |
-|-----------------|--------------------------------------------------------------|
-| `ads`           | Advertising networks and ad delivery                         |
-| `analytics`     | User behavior measurement and reporting                      |
-| `cdn`           | Content delivery networks and static asset hosting           |
-| `malware`       | Malware, phishing, known hostile domains                     |
-| `social`        | Social networks, dating, gambling, adult content             |
-| `suspicious`    | Unverified or potentially hostile                            |
-| `telemetry`     | Error reporting, performance monitoring, device telemetry    |
-| `tracking`      | Cross-site user tracking and profiling                       |
-| `local`         | RFC1918, localhost, loopback, your own domains               |
-| `infrastructure`| Web standards, semantic namespaces, DNS resolvers            |
-| `unknown`       | Default if no provider matched                               |
-
+| Category         | Description                                                  |
+|------------------|--------------------------------------------------------------|
+| `ads`            | Advertising networks and ad delivery                         |
+| `analytics`      | User behavior measurement and reporting                      |
+| `cdn`            | Content delivery networks and static asset hosting           |
+| `malware`        | Malware, phishing, known hostile domains                     |
+| `social`         | Social networks, dating, gambling, adult content             |
+| `suspicious`     | Unverified or potentially hostile                            |
+| `telemetry`      | Error reporting, performance monitoring, device telemetry    |
+| `tracking`       | Cross-site user tracking and profiling                       |
+| `local`          | RFC1918, localhost, loopback, your own domains               |
+| `infrastructure` | Web standards, semantic namespaces, DNS resolvers            |
+| `unknown`        | Default if no provider matched                               |
 
 ## Exit Codes
 
-See [docs/exitcodes.md](docs/docs/exitcodes.md) for the full reference including implementation status.
+See [Exit Codes](docs/docs/exitcodes.md) for the full reference including implementation status.
 
 ## Example
 

@@ -5,6 +5,8 @@ nav:
   - Provider: provider.md
   - Configuration API: api.md
   - Configuration TOML: config.md
+  - Result Structure: result-structure.md
+  - jq Examples: jq-examples.md
   - Exit Codes: exitcodes.md
 
 plugins:
